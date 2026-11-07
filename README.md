@@ -12,13 +12,13 @@ study places, and nothing that changes over time. Our map answers "where should 
 ```bash
 python -m http.server 8000
 ```
-Then open http://localhost:8000. The app is static (HTML/CSS/JS, PapaParse from cdnjs), so it can also be served by GitHub Pages.
+Then open http://localhost:8000. The app is static (HTML/CSS/JS; Three.js from jsDelivr, PapaParse from cdnjs), so it can also be served by GitHub Pages.
 
 ## Repository layout
 | Path | What it is |
 |---|---|
 | `index.html`, `app.js`, `style.css` | The map app |
-| Map engine | [MapLibre GL JS](https://maplibre.org/) 4.7.1 (BSD-3): our traced SVG rooms are converted to GeoJSON in the browser and drawn as 3D extrusions; markers, labels and zoom/rotate come from MapLibre |
+| `scene.js` | The map: a 3D cartoon diorama of the floor in [Three.js](https://threejs.org/) (MIT): our traced SVG rooms become bevelled toon-shaded blocks with ink outlines (`MeshToonMaterial` + `OutlineEffect`), study places are badges coloured by noise with sound ripples, and the people we counted stand there as little figures |
 | `model3d.js` | Small 3D models of each amenity (Three.js), drawn by our code from our measurements, not from downloaded models |
 | `data/photos.csv`, `data/photos/` | Our field photos (EXIF/GPS removed, resized), one row per photo |
 | `data/vending_items.csv` | Products and prices, read by us from our vending-machine photos |

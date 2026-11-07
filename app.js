@@ -1,4 +1,4 @@
-/* MSC Field Map: app logic. Loads our CSVs, draws markers on the isometric plan (iso.js),
+/* MSC Field Map: app logic. Loads our CSVs, draws the 3D cartoon floor (scene.js),
  * and drives the ranking, vending search, details, photo lightbox and 3D viewer (model3d.js). */
 (() => {
   'use strict';
@@ -28,7 +28,7 @@
     rounds: [], round: LATEST,
     visible: new Set(LAYERS.map((l) => l.key)), glow: true,
     selected: null, tab: 'quiet', vendingQuery: '',
-    map: null, view: (() => { try { return localStorage.getItem('msc-map-mode') === 'flat' ? 'flat' : 'iso'; } catch (e) { return 'iso'; } })(), firstPaint: true
+    scene: null, view: (() => { try { return localStorage.getItem('msc-map-mode') === 'flat' ? 'flat' : 'iso'; } catch (e) { return 'iso'; } })(), firstPaint: true
   };
   const $ = (id) => document.getElementById(id);
 
@@ -154,191 +154,14 @@
     buttons.forEach((b) => b.addEventListener('click', () => {
       S.view = b.dataset.mode;
       try { localStorage.setItem('msc-map-mode', S.view); } catch (e) { /* storage unavailable */ }
-      if (S.map) S.map.easeTo({ pitch: S.view === 'iso' ? 52 : 0, bearing: S.view === 'iso' ? -17 : 0, duration: reduced() ? 0 : 900 });
+      if (S.scene) S.scene.setView(S.view);
       sync();
     }));
     sync();
   }
 
-  /* ---------------- map (MapLibre GL) ---------------- */
-  // Plan pixels (sign-photo frame, 2000×1379) → small fake lon/lat around 0,0. 1 px ≈ 0.17 m, so the floor is ~280 m wide.
-  const SCALE = 0.0000015, OX = 980, OY = 780;
-  const toLL = (x, y) => [(x - OX) * SCALE, -(y - OY) * SCALE];
-  const STUDY_AREAS = [5, 8, 9, 15, 16], SHOP_AREAS = [13, 14, 17, 18, 19];
+  /* ---------------- map (3D cartoon diorama, scene.js) ---------------- */
   const tok = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
-
-  function parseRings(d) {
-    const t = d.match(/[MLZmlz]|-?\d*\.?\d+(?:e-?\d+)?/g) || [];
-    const rings = []; let ring = null, i = 0, cmd = 'M';
-    while (i < t.length) {
-      if (/[MLZmlz]/.test(t[i])) { cmd = t[i++].toUpperCase(); if (cmd === 'Z') { if (ring && ring.length > 2) rings.push(ring); ring = null; } continue; }
-      const x = +t[i++], y = +t[i++];
-      if (cmd === 'M') { if (ring && ring.length > 2) rings.push(ring); ring = [[x, y]]; cmd = 'L'; } else if (ring) ring.push([x, y]);
-    }
-    if (ring && ring.length > 2) rings.push(ring);
-    return rings;
-  }
-  const ringLL = (r) => { const ll = r.map(([x, y]) => toLL(x, y)); ll.push(ll[0]); return ll; };
-  function inside([x, y], ring) {
-    let c = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const [xi, yi] = ring[i], [xj, yj] = ring[j];
-      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
-    }
-    return c;
-  }
-
-  function planGeo(svgText) {
-    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
-    const rooms = [], labels = [], plan = [];
-    const outline = doc.querySelector('.plan-outline');
-    const floor = outline ? parseRings(outline.getAttribute('d')).map((r) => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ringLL(r)] } })) : [];
-    doc.querySelectorAll('path.room').forEach((el) => {
-      const area = Number(el.getAttribute('data-area')) || 0;
-      const cls = el.getAttribute('class') || '';
-      const group = cls.includes('open') ? 'open' : cls.includes('service') ? 'service' : STUDY_AREAS.includes(area) ? 'study' : SHOP_AREAS.includes(area) ? 'shop' : 'other';
-      // Miniature diorama: low blocks; models and markers stand on their tops.
-      const height = group === 'open' ? 0.05 : group === 'service' ? 0.8 : area === 9 ? 1.6 : area === 14 ? 1.4 : 1.2;
-      parseRings(el.getAttribute('d')).forEach((r) => {
-        const cx = r.reduce((s, p) => s + p[0], 0) / r.length, cy = r.reduce((s, p) => s + p[1], 0) / r.length;
-        const delay = Math.min(0.6, Math.hypot(cx - OX, cy - OY) / 1500);   // rise as a wave from the centre
-        plan.push({ ring: r, height });
-        rooms.push({ type: 'Feature', properties: { area, group, height, delay }, geometry: { type: 'Polygon', coordinates: [ringLL(r)] } });
-      });
-    });
-    doc.querySelectorAll('.room-labels text, .area-names text').forEach((el) => {
-      const x = +el.getAttribute('x'), y = +el.getAttribute('y');
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      labels.push({ type: 'Feature', properties: { text: el.textContent.trim(), big: el.closest('.area-names') ? 1 : 0 }, geometry: { type: 'Point', coordinates: toLL(x, y) } });
-    });
-    return { floor, rooms, labels, plan };
-  }
-  const roofAt = (x, y) => (S.plan || []).reduce((h, r) => (inside([x, y], r.ring) ? Math.max(h, r.height) : h), 0.1);
-
-  const fc = (features) => ({ type: 'FeatureCollection', features });
-
-  function roomColor() {
-    return ['match', ['get', 'group'], 'study', tok('--room-study'), 'shop', tok('--room-shop'), 'service', tok('--room-service'), 'open', tok('--room-open'), tok('--room')];
-  }
-
-  function placeFeatures() {
-    return S.places.map((p, i) => {
-      let color = tok('--' + p.layer), label = LAYER[p.layer].letter || '', text = '#ffffff', bandKey = '';
-      if (p.layer === 'study') {
-        const n = noiseFor(p.place_id); const b = band(n?.laeq);
-        color = b ? tok('--' + b.key) : tok('--unmeasured');
-        label = n ? String(Math.round(n.laeq)) : '–';
-        bandKey = b ? b.key : '';
-        if (bandKey === 'moderate') text = '#3a2b00';
-      } else if (stateFor(p.place_id).working === 'n') { color = tok('--unmeasured'); }
-      return { type: 'Feature', id: i, properties: { id: p.place_id, layer: p.layer, color, label, text, band: bandKey, study: p.layer === 'study' ? 1 : 0 }, geometry: { type: 'Point', coordinates: toLL(p.x, p.y) } };
-    });
-  }
-
-  function installMap(svgText) {
-    if (!window.maplibregl) throw new Error('MapLibre did not load (needs internet).');
-    const geo = planGeo(svgText);
-    S.plan = geo.plan;
-    const pts = S.places.map((p) => toLL(p.x, p.y));
-    const all = [...pts, ...geo.floor.flatMap((f) => f.geometry.coordinates[0])];
-    const lo = [Math.min(...all.map((c) => c[0])), Math.min(...all.map((c) => c[1]))];
-    const hi = [Math.max(...all.map((c) => c[0])), Math.max(...all.map((c) => c[1]))];
-    const plo = [Math.min(...pts.map((c) => c[0])), Math.min(...pts.map((c) => c[1]))];
-    const phi = [Math.max(...pts.map((c) => c[0])), Math.max(...pts.map((c) => c[1]))];
-    const pad = 0.0008;
-    const el = document.getElementById('map');
-    el.replaceChildren();
-    const w = el.clientWidth, p = Math.round(Math.min(90, w * 0.05));
-    const map = new maplibregl.Map({
-      container: 'map',
-      style: { version: 8, glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf', sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': tok('--map-bg') } }] },
-      bounds: [plo, phi], fitBoundsOptions: { padding: { top: Math.round(p * 0.8), bottom: Math.round(p * 0.8), left: p, right: p } },
-      maxBounds: [[lo[0] - pad, lo[1] - pad], [hi[0] + pad, hi[1] + pad]],
-      pitch: 0, bearing: 0, maxPitch: 70, attributionControl: false, renderWorldCopies: false
-    });
-    S.map = map;
-    window.mscMap = map; // handy for debugging in the console
-    map.on('error', (e) => console.warn('map:', e.error && e.error.message));
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
-
-    // Intro: start flat and a bit far, then glide into the tilted 3D view.
-    const target = { center: map.getCenter(), zoom: map.getZoom() };
-    if (!reduced()) map.jumpTo({ zoom: target.zoom - 1.1, bearing: 28 });
-
-    map.on('load', () => {
-      map.addSource('floor', { type: 'geojson', data: fc(geo.floor) });
-      map.addSource('rooms', { type: 'geojson', data: fc(geo.rooms) });
-      map.addSource('labels', { type: 'geojson', data: fc(geo.labels) });
-      map.addSource('places', { type: 'geojson', data: fc(placeFeatures()) });
-      map.addLayer({ id: 'floor', type: 'fill-extrusion', source: 'floor', paint: { 'fill-extrusion-color': tok('--floor'), 'fill-extrusion-height': 0.05, 'fill-extrusion-base': 0 } });
-      map.addLayer({ id: 'rooms', type: 'fill-extrusion', source: 'rooms', paint: {
-        'fill-extrusion-color': roomColor(), 'fill-extrusion-height': 0.06, 'fill-extrusion-base': 0.05, 'fill-extrusion-opacity': 0.96, 'fill-extrusion-vertical-gradient': true } });
-      map.addLayer({ id: 'room-labels', type: 'symbol', source: 'labels', layout: {
-        'text-field': ['get', 'text'], 'text-font': ['Open Sans Semibold'], 'text-size': ['case', ['==', ['get', 'big'], 1], 11, 10],
-        'text-letter-spacing': ['case', ['==', ['get', 'big'], 1], 0.12, 0] },
-        paint: { 'text-color': tok('--plan-label'), 'text-halo-color': tok('--map-bg'), 'text-halo-width': 1, 'text-opacity': 0, 'text-opacity-transition': { duration: 600, delay: 900 } } });
-      map.addLayer({ id: 'noise-halo', type: 'circle', source: 'places', filter: ['==', ['get', 'study'], 1], paint: {
-        'circle-color': ['get', 'color'], 'circle-opacity': 0, 'circle-blur': 0.55, 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map',
-        'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 16, 2, 22, 150],
-        'circle-opacity-transition': { duration: 900, delay: 1500 }, 'circle-color-transition': { duration: 600 } } });
-      map.addLayer({ id: 'pulse', type: 'circle', source: 'places', filter: ['==', ['get', 'id'], ''], paint: {
-        'circle-radius': 12, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': tok('--accent'), 'circle-stroke-width': 2, 'circle-stroke-opacity': 0 } });
-      map.addLayer({ id: 'sel', type: 'circle', source: 'places', filter: ['==', ['get', 'id'], ''], paint: {
-        'circle-radius': 15, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': tok('--accent'), 'circle-stroke-width': 2.5 } });
-      map.addLayer({ id: 'places', type: 'circle', source: 'places', filter: ['==', ['get', 'study'], 1], paint: {
-        'circle-radius': 0, 'circle-color': ['get', 'color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5,
-        'circle-radius-transition': { duration: 520, delay: 1300 }, 'circle-color-transition': { duration: 600 } } });
-      map.addLayer({ id: 'place-labels', type: 'symbol', source: 'places', filter: ['==', ['get', 'study'], 1], layout: {
-        'text-field': ['get', 'label'], 'text-font': ['Open Sans Semibold'], 'text-size': 11, 'text-allow-overlap': true, 'text-ignore-placement': true },
-        paint: { 'text-color': ['get', 'text'], 'text-opacity': 0, 'text-opacity-transition': { duration: 400, delay: 1650 } } });
-
-      // Entrance choreography: camera glides in, rooms rise as a wave, markers and labels pop in.
-      map.easeTo({ center: target.center, zoom: target.zoom, pitch: S.view === 'iso' ? 52 : 0, bearing: S.view === 'iso' ? -17 : 0, duration: reduced() ? 0 : 2200, easing: easeOut });
-      riseRooms(reduced() ? 0 : 1300);
-      map.setPaintProperty('places', 'circle-radius', ['case', ['boolean', ['feature-state', 'hover'], false], 14, 11]);
-      map.setPaintProperty('places', 'circle-radius-transition', { duration: 520, delay: 0 });
-      setTimeout(() => map.setPaintProperty('places', 'circle-radius-transition', { duration: 160, delay: 0 }), 1900);
-      map.setPaintProperty('place-labels', 'text-opacity', 1);
-      map.setPaintProperty('room-labels', 'text-opacity', 1);
-      map.setPaintProperty('noise-halo', 'circle-opacity', ['case', ['boolean', ['feature-state', 'hover'], false], 0.3, 0.16]);
-      applyVisibility();
-      loadModels(map);
-      bindMapPointer(map);
-      pulseLoop();
-    });
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(recolor, 50));
-  }
-
-  function riseRooms(ms) {
-    const map = S.map, t0 = performance.now();
-    const frame = () => {
-      const k = ms ? Math.min(1, (performance.now() - t0) / ms) : 1;
-      // Each room grows over the window [delay, delay + 0.4] of the shared clock k ∈ [0, 1].
-      map.setPaintProperty('rooms', 'fill-extrusion-height',
-        ['+', 0.06, ['*', ['-', ['get', 'height'], 0.06], ['min', 1, ['max', 0, ['/', ['-', k * 1.0, ['get', 'delay']], 0.4]]]]]);
-      if (k < 1) requestAnimationFrame(frame); else map.setPaintProperty('rooms', 'fill-extrusion-height', ['get', 'height']);
-    };
-    frame();
-  }
-
-  async function loadModels(map) {
-    try {
-      const mod = await import('./model3d.js');
-      const items = S.places.filter((p) => p.layer !== 'study').map((p) => ({
-        id: p.place_id, kind: p.layer, lngLat: toLL(p.x, p.y), base: roofAt(p.x, p.y), heading: -0.3, data: modelData(p)
-      }));
-      S.models = mod.createMapLayer(maplibregl, items, { origin: toLL(OX, OY), delay: reduced() ? 0 : 1500 });
-      map.addLayer(S.models.layer, 'noise-halo');
-      applyVisibility();
-      if (S.selected) S.models.setSelected(S.selected);
-    } catch (e) {
-      console.warn('3D models unavailable:', e.message);
-      // Fallback: show amenity markers as plain circles.
-      ['places', 'place-labels'].forEach((id) => map.setFilter(id, null));
-      applyVisibility();
-    }
-  }
 
   function modelData(p) {
     const st = stateFor(p.place_id);
@@ -348,72 +171,53 @@
     return { units: num(st.units), units_working: num(st.units_working), broken_note: st.note || '' };
   }
 
-  function bindMapPointer(map) {
-    const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16, className: 'tip', maxWidth: '240px' });
-    let hoverFid = null, hoverId = null;
-    const idAt = (pt) => {
-      const f = map.queryRenderedFeatures(pt, { layers: ['places'] })[0];
-      if (f) return { id: f.properties.id, fid: f.id };
-      const id = S.models ? S.models.pick(pt.x, pt.y) : null;
-      return id ? { id, fid: null } : null;
-    };
-    map.on('mousemove', (e) => {
-      const hit = idAt(e.point);
-      const id = hit ? hit.id : null;
-      if (hoverFid != null && (!hit || hit.fid !== hoverFid)) { map.setFeatureState({ source: 'places', id: hoverFid }, { hover: false }); hoverFid = null; }
-      if (hit && hit.fid != null && hit.fid !== hoverFid) { hoverFid = hit.fid; map.setFeatureState({ source: 'places', id: hoverFid }, { hover: true }); }
-      if (S.models) S.models.setHover(hit && hit.fid == null ? id : null);
-      map.getCanvas().style.cursor = id ? 'pointer' : '';
-      if (id !== hoverId) {
-        hoverId = id;
-        if (!id) tip.remove();
-        else { const p = S.byId.get(id); tip.setLngLat(toLL(p.x, p.y)).setDOMContent(h('div', {}, h('b', {}, p.name), h('span', {}, describe(p)))).addTo(map); }
+  // What the scene shows per place: colour, badge text, people figures, sound ripples, model data.
+  function markers() {
+    const out = {};
+    S.places.forEach((p) => {
+      if (p.layer === 'study') {
+        const n = noiseFor(p.place_id), b = band(n?.laeq), o = obsFor(p.place_id);
+        out[p.place_id] = {
+          color: b ? tok('--' + b.key) : tok('--unmeasured'),
+          label: n ? String(Math.round(n.laeq)) : '–',
+          people: o && o.people ? Number(o.people) || 0 : 0,
+          ripples: b ? { quiet: 0, moderate: 1, loud: 2, vloud: 3 }[b.key] : 0
+        };
+      } else {
+        out[p.place_id] = { color: tok('--' + p.layer), model: { kind: p.layer, data: modelData(p) } };
       }
     });
-    map.getCanvas().addEventListener('mouseleave', () => { tip.remove(); hoverId = null; if (S.models) S.models.setHover(null); });
-    map.on('click', (e) => { const hit = idAt(e.point); if (hit) select(hit.id, true); });
+    return out;
   }
 
-  // Selected marker: an expanding ring that repeats while something is selected.
-  function pulseLoop() {
-    const map = S.map;
-    const frame = (now) => {
-      if (S.selected && S.map.getLayer('pulse') && !reduced()) {
-        const t = (now % 1600) / 1600;
-        map.setPaintProperty('pulse', 'circle-radius', 13 + 22 * easeOut(t));
-        map.setPaintProperty('pulse', 'circle-stroke-opacity', 0.7 * (1 - t));
-      }
-      requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
+  let tip = null;
+  function showTip(id, x, y) {
+    if (!tip) { tip = h('div', { class: 'tip', role: 'status' }); $('map').parentElement.appendChild(tip); }
+    if (!id) { tip.hidden = true; return; }
+    const p = S.byId.get(id);
+    if (tip.dataset.id !== id) { tip.dataset.id = id; tip.replaceChildren(h('b', {}, p.name), h('span', {}, describe(p))); }
+    tip.hidden = false;
+    tip.style.transform = `translate(${Math.round(x + 14)}px, ${Math.round(y + 14)}px)`;
   }
 
-  function recolor() {
-    const map = S.map;
-    if (!map || !map.getLayer('rooms')) return;
-    map.setPaintProperty('bg', 'background-color', tok('--map-bg'));
-    map.setPaintProperty('floor', 'fill-extrusion-color', tok('--floor'));
-    map.setPaintProperty('rooms', 'fill-extrusion-color', roomColor());
-    map.setPaintProperty('room-labels', 'text-color', tok('--plan-label'));
-    map.setPaintProperty('room-labels', 'text-halo-color', tok('--map-bg'));
-    ['sel', 'pulse'].forEach((id) => map.setPaintProperty(id, 'circle-stroke-color', tok('--accent')));
-    updateMarkers();
+  async function installMap(svgText) {
+    const el = $('map');
+    let mod;
+    try { mod = await import('./scene.js'); } catch (e) { throw new Error('3D engine did not load (Three.js needs internet).'); }
+    el.replaceChildren();
+    S.scene = mod.createScene(el, {
+      svgText, view: S.view, markers: markers(),
+      places: S.places.map((p) => ({ id: p.place_id, layer: p.layer, x: Number(p.x), y: Number(p.y) })),
+      onHover: showTip,
+      onPick: (id) => select(id, true)
+    });
+    applyVisibility();
+    if (S.selected) S.scene.select(S.selected, false);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(updateMarkers, 50));
   }
 
-  function updateMarkers() {
-    const src = S.map && S.map.getSource('places');
-    if (src) src.setData(fc(placeFeatures()));
-  }
-
-  function applyVisibility() {
-    const map = S.map;
-    if (!map || !map.getLayer('places')) return;
-    const vis = ['in', ['get', 'layer'], ['literal', [...S.visible]]];
-    const studyOnly = S.models ? ['==', ['get', 'study'], 1] : true;
-    ['places', 'place-labels'].forEach((id) => map.setFilter(id, ['all', studyOnly, vis]));
-    map.setFilter('noise-halo', ['all', ['==', ['get', 'study'], 1], vis]);
-    if (S.models) S.models.setVisible([...S.visible]);
-  }
+  function updateMarkers() { if (S.scene) S.scene.update(markers()); }
+  function applyVisibility() { if (S.scene) S.scene.setVisible([...S.visible]); }
 
   function describe(p) {
     if (p.layer === 'study') {
@@ -432,21 +236,11 @@
 
   function select(id, fromMap = false) {
     S.selected = id;
-    const map = S.map;
-    if (map && map.getLayer('sel')) {
-      const isStudy = S.byId.get(id).layer === 'study';
-      map.setFilter('sel', isStudy ? ['==', ['get', 'id'], id] : ['==', ['get', 'id'], '']);
-      map.setFilter('pulse', isStudy ? ['==', ['get', 'id'], id] : ['==', ['get', 'id'], '']);
-    }
-    if (S.models) S.models.setSelected(id);
+    if (S.scene) S.scene.select(id, !fromMap);
     document.querySelectorAll('.rank').forEach((b) => b.classList.toggle('is-selected', b.dataset.id === id));
     setTab('details');
     renderDetails();
-    if (map) {
-      const p = S.byId.get(id);
-      map.flyTo({ center: toLL(p.x, p.y), zoom: Math.max(map.getZoom(), fromMap ? map.getZoom() : 19), duration: reduced() ? 0 : 1000, essential: true });
-      if (!fromMap && window.innerWidth < 820) document.getElementById('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
-    }
+    if (!fromMap && window.innerWidth < 820) $('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
   }
 
   /* ---------------- panel ---------------- */
@@ -802,7 +596,7 @@
       const svgText = await load();
       renderChips();
       renderRounds();
-      installMap(svgText);
+      await installMap(svgText);
       bindView();
       bindGlobalSearch();
       setTab('quiet');

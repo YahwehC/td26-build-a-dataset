@@ -527,111 +527,49 @@ function buildPrinters(root, kit, data, drops) {
   }
 }
 
-/* ---------- models standing on the MapLibre map (custom 3D layer) ----------
- * Same builders as the viewer, placed at each amenity's position and drawn into MapLibre's own WebGL
- * context, so they share the depth buffer with the extruded rooms. Pattern from the MapLibre example
- * "Add a 3D model with three.js". Sizes are exaggerated (miniature look) so they read at floor zoom. */
-const MAP_HEIGHT_M = { vending: 13, water: 9, microwave: 7, printer: 8 };
+/* ---------- toon versions for the cartoon map (scene.js) ----------
+ * Same builders as the viewer; materials are swapped for MeshToonMaterial so OutlineEffect draws ink lines. */
+let GRADIENT = null;
+export function toonGradient() {
+  if (!GRADIENT) {
+    GRADIENT = new THREE.DataTexture(new Uint8Array([120, 120, 120, 255, 200, 200, 200, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+    GRADIENT.minFilter = GRADIENT.magFilter = THREE.NearestFilter;
+    GRADIENT.generateMipmaps = false;
+    GRADIENT.needsUpdate = true;
+  }
+  return GRADIENT;
+}
 
-export function createMapLayer(maplibregl, items, opts = {}) {
-  const origin = maplibregl.MercatorCoordinate.fromLngLat(opts.origin, 0);
-  const unit = origin.meterInMercatorCoordinateUnits();
-  const scene = new THREE.Scene();
-  const camera = new THREE.Camera();
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xd9dce8, 1.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-  sun.position.set(-40, 90, -60);
-  scene.add(sun);
-
-  const holders = items.map((it, i) => {
-    const kit = makeKit((o) => o);
-    const g = new THREE.Group();
-    const drops = [], spin = [], picks = [];
-    if (it.kind === 'vending') buildVending(g, kit, it.data || {}, picks, drops);
-    else if (it.kind === 'water') buildWater(g, kit, it.data || {}, drops, spin);
-    else if (it.kind === 'microwave') buildMicrowaves(g, kit, it.data || {}, drops);
-    else buildPrinters(g, kit, it.data || {}, drops);
-    const box = new THREE.Box3().setFromObject(g);
-    const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-    g.position.set(-c.x, -box.min.y, -c.z);
-    const holder = new THREE.Group();
-    const inner = new THREE.Group();
-    inner.add(g);
-    holder.add(inner);
-    const mc = maplibregl.MercatorCoordinate.fromLngLat(it.lngLat, 0);
-    holder.position.set((mc.x - origin.x) / unit, it.base || 0, (mc.y - origin.y) / unit);
-    holder.rotation.y = it.heading || 0;
-    const s = (MAP_HEIGHT_M[it.kind] || 2.5) / Math.max(size.y, 0.01);
-    holder.userData = { id: it.id, kind: it.kind, s, delay: (opts.delay || 0) + i * 110, spin, inner, k: 0 };
-    holder.scale.setScalar(0.0001);
-    holder.traverse((o) => { o.userData.holder = holder; });
-    scene.add(holder);
-    return holder;
-  });
-
-  let renderer = null, map = null, t0 = 0, hoverId = null, selId = null;
-  const visible = new Set(items.map((it) => it.kind));
-  const ray = new THREE.Raycaster();
-
-  const layer = {
-    id: opts.id || 'amenity-models',
-    type: 'custom',
-    renderingMode: '3d',
-    onAdd(m, gl) {
-      map = m;
-      renderer = new THREE.WebGLRenderer({ canvas: m.getCanvas(), context: gl, antialias: true });
-      renderer.autoClear = false;
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-      t0 = performance.now();
-    },
-    render(gl, matrix) {
-      const now = performance.now() - t0;
-      let busy = false;
-      holders.forEach((h) => {
-        const u = h.userData;
-        const appear = reduced() ? 1 : clamp01((now - u.delay) / 650);
-        if (appear < 1) busy = true;
-        const pop = appear <= 0 ? 0.0001 : Math.max(0.0001, outBack(appear));
-        const hover = u.id === hoverId ? 1 : 0, sel = u.id === selId ? 1 : 0;
-        u.k += ((hover || sel) - u.k) * 0.18;
-        if (Math.abs((hover || sel) - u.k) > 0.002) busy = true;
-        const bob = sel && !reduced() ? Math.sin(now / 380) * 0.35 : 0;
-        if (sel) busy = true;
-        u.inner.position.y = u.k * 0.9 + Math.max(0, bob);
-        h.scale.setScalar(u.s * pop * (1 + 0.12 * u.k));
-        h.visible = visible.has(u.kind);
-        u.spin.forEach((fn) => fn(now));
-        if (u.spin.length) busy = true;
-      });
-      const m = new THREE.Matrix4().fromArray(matrix);
-      const l = new THREE.Matrix4().makeTranslation(origin.x, origin.y, origin.z)
-        .scale(new THREE.Vector3(unit, -unit, unit))
-        .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-      camera.projectionMatrix = m.multiply(l);
-      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
-      renderer.resetState();
-      renderer.render(scene, camera);
-      if (busy) map.triggerRepaint();
+function toonify(root) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = o.material;
+    if (m.isMeshStandardMaterial) {
+      o.material = new THREE.MeshToonMaterial({ color: m.color, gradientMap: toonGradient(), map: m.map || null,
+        transparent: m.transparent, opacity: m.opacity, emissive: m.emissive, emissiveIntensity: m.emissiveIntensity });
+      if (m.transparent) o.material.userData.outlineParameters = { visible: false };
+      m.dispose();
+      o.castShadow = true;
+    } else {
+      m.userData.outlineParameters = { visible: false };
     }
-  };
+  });
+}
 
-  return {
-    layer,
-    // Screen point (CSS px in the map canvas) -> amenity id under it, or null.
-    pick(x, y) {
-      if (!map) return null;
-      const cv = map.getCanvas();
-      const nx = (x / cv.clientWidth) * 2 - 1, ny = 1 - (y / cv.clientHeight) * 2;
-      const inv = camera.projectionMatrixInverse;
-      const near = new THREE.Vector3(nx, ny, -1).applyMatrix4(inv);
-      const far = new THREE.Vector3(nx, ny, 1).applyMatrix4(inv);
-      ray.set(near, far.sub(near).normalize());
-      const hits = ray.intersectObjects(holders.filter((h) => h.visible), true);
-      return hits.length ? hits[0].object.userData.holder?.userData.id || null : null;
-    },
-    setHover(id) { if (id !== hoverId) { hoverId = id; map && map.triggerRepaint(); } },
-    setSelected(id) { selId = id; map && map.triggerRepaint(); },
-    setVisible(kinds) { visible.clear(); kinds.forEach((k) => visible.add(k)); map && map.triggerRepaint(); },
-    replay() { t0 = performance.now(); map && map.triggerRepaint(); }
-  };
+export function buildModel(kind, data = {}) {
+  const kit = makeKit((o) => o);
+  const g = new THREE.Group();
+  const drops = [], spin = [], picks = [];
+  if (kind === 'vending') buildVending(g, kit, data, picks, drops);
+  else if (kind === 'water') buildWater(g, kit, data, drops, spin);
+  else if (kind === 'microwave') buildMicrowaves(g, kit, data, drops);
+  else buildPrinters(g, kit, data, drops);
+  toonify(g);
+  const box = new THREE.Box3().setFromObject(g);
+  const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  g.position.set(-c.x, -box.min.y, -c.z);
+  const holder = new THREE.Group();
+  holder.add(g);
+  holder.userData.size = size;
+  return holder;
 }
