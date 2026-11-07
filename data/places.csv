@@ -19,5 +19,5 @@ V-1,vending,Vending machine 1,16,690,1120,row of 4 machines south of area 16,,,
 V-2,vending,Vending machine 2,16,716,1120,row of 4 machines south of area 16,,,
 V-3,vending,Vending machine 3,16,742,1120,row of 4 machines south of area 16,,,
 V-4,vending,Vending machine 4,16,768,1120,row of 4 machines south of area 16,,,
-M-1,microwave,Microwaves,14,966,1042,west part of area 14,,,
+M-1,microwave,Microwaves (4),14,966,1042,west part of area 14,,,disposable utensils and napkins next to the microwaves
 P-1,printer,Printers (3),16,782,1045,next to area 16,,,
