@@ -250,18 +250,54 @@
     };
     (outline ? outline.poly : []).forEach(([x, y]) => { add(x, y, 0); add(x, y, -SLAB); });
     rooms.forEach((r) => r.poly.forEach(([x, y]) => add(x, y, r.h)));
-    const m = 60;
-    return [minX - m, minY - m - 40, maxX - minX + 2 * m, maxY - minY + 2 * m + 70];
+    const m = 24;
+    return [minX - m, minY - m - 30, maxX - minX + 2 * m, maxY - minY + 2 * m + 30];
   }
   let isoVB = null;
-  function currentViewBox() {
+  function baseViewBox() {
     if (!isoVB) isoVB = isoBounds();
     return FLAT_VB.map((v, i) => v + (isoVB[i] - v) * morph);
+  }
+  // Camera: zoom z (1 = whole floor) and centre offset (x, y) in SVG units from the base centre.
+  let cam = { z: 1, x: 0, y: 0 }, camFrom = cam, camTo = cam, camStart = 0;
+  const CAM_MS = 420;
+  function clampCam(c) {
+    const b = baseViewBox();
+    const z = Math.min(6, Math.max(1, c.z));
+    const mx = (b[2] - b[2] / z) / 2, my = (b[3] - b[3] / z) / 2;
+    return { z, x: Math.max(-mx, Math.min(mx, c.x)), y: Math.max(-my, Math.min(my, c.y)) };
+  }
+  function currentViewBox() {
+    const b = baseViewBox();
+    const w = b[2] / cam.z, h = b[3] / cam.z;
+    const cx = b[0] + b[2] / 2 + cam.x, cy = b[1] + b[3] / 2 + cam.y;
+    return [cx - w / 2, cy - h / 2, w, h];
+  }
+  function setCamera(c, animate = true) {
+    const next = clampCam({ ...camTo, ...c });
+    if (!animate || reducedMotion()) { cam = camFrom = camTo = next; startLoop(); return; }
+    camFrom = { ...cam }; camTo = next; camStart = performance.now();
+    startLoop();
+  }
+  // Zoom by `factor` keeping SVG point (px, py) fixed on screen.
+  function zoomAt(factor, px, py, animate = false) {
+    const b = baseViewBox();
+    const base = animate ? camTo : cam;
+    const z = Math.min(6, Math.max(1, base.z * factor));
+    const f = z / base.z;
+    const cx = b[0] + b[2] / 2 + base.x, cy = b[1] + b[3] / 2 + base.y;
+    const ncx = px + (cx - px) / f, ncy = py + (cy - py) / f;
+    setCamera({ z, x: ncx - (b[0] + b[2] / 2), y: ncy - (b[1] + b[3] / 2) }, animate);
+  }
+  function panBy(dx, dy) { setCamera({ x: cam.x + dx, y: cam.y + dy }, false); }
+  function focusOn(px, py, z) {
+    const b = baseViewBox();
+    setCamera({ z: Math.max(camTo.z, z), x: px - (b[0] + b[2] / 2), y: py - (b[1] + b[3] / 2) }, true);
   }
 
   function animating(now) {
     const growing = !reducedMotion() && rooms.some((r) => now - growStart - r.delay < 620);
-    return growing || morphTo !== morph;
+    return growing || morphTo !== morph || cam !== camTo;
   }
 
   function tick(now) {
@@ -269,6 +305,11 @@
       const t = reducedMotion() ? 1 : clamp01((now - morphStart) / morphDur);
       morph = morphFrom + (morphTo - morphFrom) * ease.inOut(t);
       if (t >= 1) morph = morphTo;
+    }
+    if (cam !== camTo) {
+      const t = clamp01((now - camStart) / CAM_MS);
+      const k = ease.inOut(t);
+      cam = t >= 1 ? camTo : { z: camFrom.z + (camTo.z - camFrom.z) * k, x: camFrom.x + (camTo.x - camFrom.x) * k, y: camFrom.y + (camTo.y - camFrom.y) * k };
     }
     draw(now);
     frameCallbacks.forEach((cb) => { try { cb(morph); } catch (e) { console.error(e); } });
@@ -300,7 +341,13 @@
     elevationAt,
     onFrame: (cb) => frameCallbacks.push(cb),
     refresh: () => startLoop(),
-    morph: () => morph
+    morph: () => morph,
+    setCamera,
+    getCamera: () => ({ ...camTo }),
+    zoomAt,
+    panBy,
+    focusOn,
+    resetCamera: () => setCamera({ z: 1, x: 0, y: 0 }, true)
   };
   window.IsoMap = api;
 })();

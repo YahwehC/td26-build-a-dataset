@@ -136,7 +136,7 @@
         applyVisibility();
         renderQuiet();
       }
-    }, h('span', { class: 'dot', 'aria-hidden': 'true' }), l.label, h('span', { class: 'count' }, S.places.filter((p) => p.layer === l.key).length))),
+    }, h('span', { class: 'dot', 'aria-hidden': 'true' }, l.letter || 'dB'), l.label, h('span', { class: 'count' }, S.places.filter((p) => p.layer === l.key).length))),
     h('button', {
       type: 'button', class: 'chip', 'aria-pressed': 'true', style: '--chip-color:radial-gradient(circle,var(--loud),transparent 75%);--delay:360ms',
       onclick: (e) => {
@@ -175,6 +175,91 @@
     IsoMap.onFrame(positionMarkers);
     new ResizeObserver(() => positionMarkers()).observe(map);
     positionMarkers();
+    bindZoom(map);
+    // Open slightly zoomed onto the measured places so markers don't overlap.
+    const pts = S.places.map((p) => IsoMap.project(p.x, p.y, IsoMap.elevationAt(p.x, p.y)));
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    setTimeout(() => {
+      IsoMap.focusOn((Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, 1.35);
+      setTimeout(() => S.syncZoomed && S.syncZoomed(), 450);
+    }, reduced() ? 0 : 700);
+  }
+
+  /* ---------------- zoom + pan ---------------- */
+  function toSvg(cx, cy) {
+    const pt = S.svg.createSVGPoint();
+    pt.x = cx; pt.y = cy;
+    return pt.matrixTransform(S.svg.getScreenCTM().inverse());
+  }
+  function bindZoom(map) {
+    const ptrs = new Map();
+    let pinch = null, moved = 0;
+    const syncZoomed = () => map.classList.toggle('is-zoomed', IsoMap.getCamera().z > 1.01);
+    map.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const p = toSvg(e.clientX, e.clientY);
+      IsoMap.zoomAt(Math.exp(-e.deltaY * 0.0016), p.x, p.y);
+      syncZoomed();
+    }, { passive: false });
+    map.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      moved = 0;
+      if (ptrs.size === 2) {
+        const [a, b] = [...ptrs.values()];
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) };
+      }
+    });
+    map.addEventListener('pointermove', (e) => {
+      const prev = ptrs.get(e.pointerId);
+      if (!prev) return;
+      const cur = { x: e.clientX, y: e.clientY };
+      ptrs.set(e.pointerId, cur);
+      if (ptrs.size === 2 && pinch) {
+        const [a, b] = [...ptrs.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        const mid = toSvg((a.x + b.x) / 2, (a.y + b.y) / 2);
+        IsoMap.zoomAt(d / pinch.d, mid.x, mid.y);
+        pinch.d = d;
+        moved += 10;
+      } else if (ptrs.size === 1) {
+        const dx = cur.x - prev.x, dy = cur.y - prev.y;
+        moved += Math.abs(dx) + Math.abs(dy);
+        if (moved > 4) {
+          if (!map.hasPointerCapture(e.pointerId)) map.setPointerCapture(e.pointerId);
+          map.classList.add('is-panning');
+          hideTip();
+          const k = unitsPerPx();
+          IsoMap.panBy(-dx * k, -dy * k);
+        }
+      }
+      syncZoomed();
+    });
+    const end = (e) => {
+      ptrs.delete(e.pointerId);
+      if (ptrs.size < 2) pinch = null;
+      if (!ptrs.size) map.classList.remove('is-panning');
+    };
+    map.addEventListener('pointerup', end);
+    map.addEventListener('pointercancel', end);
+    // A drag must not count as a click on a marker it started on.
+    map.addEventListener('click', (e) => { if (moved > 4) { e.stopPropagation(); e.preventDefault(); } }, true);
+    map.addEventListener('dblclick', (e) => {
+      const p = toSvg(e.clientX, e.clientY);
+      IsoMap.zoomAt(1.8, p.x, p.y, true);
+      setTimeout(syncZoomed, 450);
+    });
+    const zoomBtn = (f) => () => {
+      const vb = S.svg.viewBox.baseVal;
+      IsoMap.zoomAt(f, vb.x + vb.width / 2, vb.y + vb.height / 2, true);
+      setTimeout(syncZoomed, 450);
+    };
+    const tools = h('div', { class: 'map-tools' },
+      h('button', { type: 'button', 'aria-label': 'Zoom in', onclick: zoomBtn(1.6) }, '+'),
+      h('button', { type: 'button', 'aria-label': 'Zoom out', onclick: zoomBtn(1 / 1.6) }, '−'),
+      h('button', { type: 'button', class: 'reset', 'aria-label': 'Show the whole floor', onclick: () => { IsoMap.resetCamera(); setTimeout(syncZoomed, 450); } }, '⤢'));
+    map.parentElement.appendChild(tools);
+    S.syncZoomed = syncZoomed;
   }
 
   function buildMarkers() {
@@ -185,25 +270,24 @@
       const pop = s('g', { class: 'pop' }, g);
       const enter = s('g', { class: reduced() ? '' : 'enter', style: `--delay:${900 + i * 34}ms` }, pop);
       const m = { place: p, g, enter, parts: {} };
-      m.parts.shadow = s('ellipse', { class: 'shadow', rx: 9, ry: 3.6 }, enter);
-      if (p.layer === 'study') m.parts.glow = s('ellipse', { class: 'glow', rx: 48, ry: 30, style: `--breathe:${(-i * 0.37).toFixed(2)}s` }, enter);
+      if (p.layer === 'study') m.parts.glow = s('ellipse', { class: 'glow', rx: 30, ry: 30 }, enter);
+      m.parts.shadow = s('ellipse', { class: 'shadow', rx: 7, ry: 2.8 }, enter);
       const lift = s('g', { class: 'lift' }, enter);
-      m.parts.stem = s('line', { class: 'stem', x1: 0, y1: 0, x2: 0, y2: -24 }, lift);
+      m.parts.stem = s('line', { class: 'stem', x1: 0, y1: 0, x2: 0, y2: -16 }, lift);
       const head = s('g', { class: 'head-g' }, lift);
       m.parts.headG = head;
       if (p.layer === 'study') {
-        m.parts.head = s('circle', { class: 'head', r: 11 }, head);
-        m.parts.db = s('text', { class: 'db', y: -19 }, head);
+        m.parts.head = s('rect', { class: 'head', x: -17, y: -11, width: 34, height: 22, rx: 11 }, head);
+        m.parts.db = s('text', { class: 'db', y: 0.5 }, head);
+        m.parts.ring = s('rect', { class: 'ring', x: -21, y: -15, width: 42, height: 30, rx: 15 }, head);
+        m.parts.pulse = s('rect', { class: 'ring-pulse', x: -21, y: -15, width: 42, height: 30, rx: 15 }, head);
       } else {
-        m.parts.head = s('rect', { class: 'head', x: -12, y: -12, width: 24, height: 24, rx: 7, fill: LAYER[p.layer].color }, head);
-        s('text', { class: 'glyph-text', y: 1 }, head).textContent = LAYER[p.layer].letter;
-        m.parts.slash = s('line', { class: 'slash', x1: -10, y1: 10, x2: 10, y2: -10, display: 'none' }, head);
+        m.parts.head = s('rect', { class: 'head', x: -11, y: -11, width: 22, height: 22, rx: 7, fill: LAYER[p.layer].color }, head);
+        s('text', { class: 'glyph-text', y: 0.5 }, head).textContent = LAYER[p.layer].letter;
+        m.parts.slash = s('line', { class: 'slash', x1: -9, y1: 9, x2: 9, y2: -9, display: 'none' }, head);
+        m.parts.ring = s('rect', { class: 'ring', x: -15, y: -15, width: 30, height: 30, rx: 10 }, head);
+        m.parts.pulse = s('rect', { class: 'ring-pulse', x: -15, y: -15, width: 30, height: 30, rx: 10 }, head);
       }
-      m.parts.ring = s('circle', { class: 'ring', r: 17 }, head);
-      m.parts.pulse = s('circle', { class: 'ring-pulse', r: 17 }, head);
-      m.parts.badge = s('g', { class: 'badge-g', transform: 'translate(11 -11)', display: 'none' }, head);
-      s('circle', { class: 'badge', r: 6.5 }, m.parts.badge);
-      s('circle', { class: 'badge-lens', r: 2.4 }, m.parts.badge);
       g.addEventListener('click', () => select(p.place_id, true));
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(p.place_id, true); } });
       g.addEventListener('pointerenter', () => showTip(m));
@@ -232,11 +316,11 @@
       const z = IsoMap.elevationAt(m.place.x, m.place.y);
       const pt = IsoMap.project(m.place.x, m.place.y, z);
       m.g.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)}) scale(${k.toFixed(3)})`);
-      const stem = 6 + 20 * morph;
+      const stem = 2 + 12 * morph;
       m.parts.stem.setAttribute('y2', String(-stem));
-      m.parts.headG.setAttribute('transform', `translate(0 ${-stem})`);
+      m.parts.headG.setAttribute('transform', `translate(0 ${-(stem + 10)})`);
       m.parts.shadow.setAttribute('opacity', String(0.25 + 0.75 * morph));
-      if (m.parts.glow) m.parts.glow.setAttribute('ry', String(48 * (1 - 0.42 * morph)));
+      if (m.parts.glow) m.parts.glow.setAttribute('ry', String(30 * (1 - 0.42 * morph)));
       placed.push([pt.y, m.g]);
     });
     placed.sort((a, b) => a[0] - b[0]).forEach(([, g]) => S.markerLayer.appendChild(g));
@@ -256,12 +340,11 @@
   function updateMarkers(animate) {
     S.markers.forEach((m) => {
       const p = m.place;
-      const hasPhotos = photosFor(p.place_id).length > 0;
-      m.parts.badge.setAttribute('display', hasPhotos ? 'inline' : 'none');
       if (p.layer === 'study') {
         const n = noiseFor(p.place_id);
         const b = band(n?.laeq);
         const color = b ? `var(--${b.key})` : 'var(--unmeasured)';
+        m.g.dataset.band = b ? b.key : '';
         m.parts.head.setAttribute('fill', color);
         m.parts.glow.setAttribute('fill', color);
         m.parts.glow.style.visibility = n ? 'visible' : 'hidden';
@@ -321,7 +404,13 @@
     document.querySelectorAll('.rank').forEach((b) => b.classList.toggle('is-selected', b.dataset.id === id));
     setTab('details');
     renderDetails();
-    if (!fromMap && window.innerWidth < 960) $('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' });
+    if (!fromMap) {
+      const p = S.byId.get(id);
+      const pt = IsoMap.project(p.x, p.y, IsoMap.elevationAt(p.x, p.y));
+      IsoMap.focusOn(pt.x, pt.y, 2);
+      setTimeout(() => S.syncZoomed && S.syncZoomed(), 450);
+      if (window.innerWidth < 960) $('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' });
+    }
   }
 
   /* ---------------- panel ---------------- */
@@ -528,6 +617,57 @@
     return svg;
   }
 
+  /* ---------------- global search (places + vending products) ---------------- */
+  function searchResults(q) {
+    const out = [];
+    const seen = new Set();
+    const add = (p, meta, val) => { if (seen.has(p.place_id)) return; seen.add(p.place_id); out.push({ p, meta, val }); };
+    const wantsQuiet = ['quiet', 'study', 'noise', 'seat'].some((w) => w.startsWith(q) || q.startsWith(w));
+    if (wantsQuiet) {
+      S.places.filter((p) => p.layer === 'study').map((p) => ({ p, n: noiseFor(p.place_id) }))
+        .sort((a, b) => (a.n ? a.n.laeq : 999) - (b.n ? b.n.laeq : 999))
+        .forEach(({ p, n }) => add(p, areaName(p), n ? n.laeq.toFixed(1) + ' dBA' : ''));
+    }
+    S.places.forEach((p) => {
+      const hay = [p.name, areaName(p), LAYER[p.layer].label, LAYER[p.layer].one, p.location_note].join(' ').toLowerCase();
+      if (hay.includes(q)) add(p, describe(p), '');
+    });
+    S.items.filter((i) => (i.product || '').toLowerCase().includes(q) || (i.category || '').toLowerCase().includes(q))
+      .forEach((i) => add(S.byId.get(i.place_id), `${i.product}${i.slot ? ' · slot ' + i.slot : ''}`, i.price != null ? money(i.price) : ''));
+    return out.slice(0, 8);
+  }
+  function bindGlobalSearch() {
+    const input = $('global-search'), list = $('global-results');
+    let rows = [], active = -1;
+    const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
+    const choose = (r) => { close(); input.value = ''; input.blur(); select(r.p.place_id); };
+    const paint = () => {
+      list.replaceChildren(...(rows.length ? rows.map((r, i) => h('li', { role: 'option', 'aria-selected': String(i === active) },
+        h('button', { type: 'button', class: i === active ? 'is-active' : '', onmousedown: (e) => e.preventDefault(), onclick: () => choose(r) },
+          h('span', { class: 'g-ico', style: `--chip-color:${LAYER[r.p.layer].color}` }, LAYER[r.p.layer].letter || 'dB'),
+          h('span', {}, h('span', { class: 'g-name' }, r.p.name), h('span', { class: 'g-meta' }, r.meta)),
+          h('span', { class: 'g-val' }, r.val))))
+        : [h('li', { class: 'g-empty' }, 'Nothing matches. Try "quiet", "water", "chips" or "microwave".')]));
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    };
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      if (!q) { close(); return; }
+      rows = searchResults(q); active = rows.length ? 0 : -1; paint();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (list.hidden) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!rows.length) return;
+        active = (active + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length; paint();
+      } else if (e.key === 'Enter' && rows[active]) { e.preventDefault(); choose(rows[active]); }
+      else if (e.key === 'Escape') close();
+    });
+    input.addEventListener('blur', () => setTimeout(close, 120));
+  }
+
   /* ---------------- facts ---------------- */
   function renderFacts() {
     const measured = S.noise.filter((n) => n.laeq != null);
@@ -633,6 +773,7 @@
       renderRounds();
       installMap(svgText);
       bindView();
+      bindGlobalSearch();
       renderFacts();
       setTab('quiet');
       S.firstPaint = false;
