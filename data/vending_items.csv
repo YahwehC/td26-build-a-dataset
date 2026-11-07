@@ -1,1 +1,37 @@
 place_id,round,slot,product,category,size,price_usd,sold_out,source_photo,note
+V-1,R0,A1,Propel fitness water,drink,,,,data/photos/V-1/bf0e076060ea36dc7ba6dac889cad382.jpg,top shelf has several Propel flavors; column = our left-to-right count; price not visible in photo
+V-1,R0,B1,Poppi prebiotic soda (can),drink,,,,data/photos/V-1/bf0e076060ea36dc7ba6dac889cad382.jpg,price not visible in photo
+V-1,R0,B2,Pure Leaf iced tea,drink,,,,data/photos/V-1/bf0e076060ea36dc7ba6dac889cad382.jpg,several columns; price not visible in photo
+V-1,R0,D1,Gatorade (blue),drink,,,,data/photos/V-1/bf0e076060ea36dc7ba6dac889cad382.jpg,price not visible in photo
+V-1,R0,D2,Gatorade (red),drink,,,,data/photos/V-1/bf0e076060ea36dc7ba6dac889cad382.jpg,price not visible in photo
+V-1,R0,D3,Gatorade (light blue),drink,,,,data/photos/V-1/bf0e076060ea36dc7ba6dac889cad382.jpg,price not visible in photo
+V-1,R0,E1,LIFEWTR,drink,,,,data/photos/V-1/bf0e076060ea36dc7ba6dac889cad382.jpg,bottom shelf; price not visible in photo
+V-2,R0,A2,Doritos Cool Ranch,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 112; price not visible in photo
+V-2,R0,A3,Ruffles,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 114
+V-2,R0,A5,Sun Chips Garden Salsa,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 118
+V-2,R0,B1,Doritos Flamin' Hot,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 120
+V-2,R0,B2,Cheez-It,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 122
+V-2,R0,B3,Lay's,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 124
+V-2,R0,C1,Miss Vickie's chips,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 130
+V-2,R0,C2,Cheetos Crunchy,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 132
+V-2,R0,C3,Cheetos,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 134
+V-2,R0,C4,Fritos,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 136
+V-2,R0,D3,Oreo,cookie,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 144
+V-2,R0,D4,Famous Amos cookies,cookie,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 146
+V-2,R0,D5,Nerds Gummy Clusters,candy,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 148 (read from bag color and logo)
+V-2,R0,E2,Reese's Peanut Butter Cups,candy,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 151
+V-2,R0,E7,Hershey's,candy,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 156
+V-2,R0,E9,M&M's,candy,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 158
+V-2,R0,F5,Jack Link's beef jerky,snack,,,,data/photos/V-2/4d60639c761c2e1b4531c7e5cf9b1f49.jpg,printed slot 166 area
+V-3,R0,A1,Pepsi,drink,20 oz bottle,,,data/photos/V-3/77b82018eebc2dd9cd58265cfa6d8f60.jpg,top shelf; machine display shows 37 F; price not visible in photo
+V-3,R0,B1,Diet Pepsi / Pepsi Zero Sugar,drink,20 oz bottle,,,data/photos/V-3/77b82018eebc2dd9cd58265cfa6d8f60.jpg,black-label bottles
+V-3,R0,B6,Starry lemon-lime soda,drink,20 oz bottle,,,data/photos/V-3/77b82018eebc2dd9cd58265cfa6d8f60.jpg,
+V-3,R0,C1,Mountain Dew,drink,20 oz bottle,,,data/photos/V-3/77b82018eebc2dd9cd58265cfa6d8f60.jpg,
+V-3,R0,D1,Dr Pepper,drink,20 oz bottle,,,data/photos/V-3/77b82018eebc2dd9cd58265cfa6d8f60.jpg,
+V-3,R0,D6,Crush orange soda,drink,20 oz bottle,,,data/photos/V-3/77b82018eebc2dd9cd58265cfa6d8f60.jpg,
+V-3,R0,E1,Aquafina water,drink,,,,data/photos/V-3/77b82018eebc2dd9cd58265cfa6d8f60.jpg,bottom shelf
+V-4,R0,A1,Celsius energy drink,drink,can,,,data/photos/V-4/76825f17ef7b57d49894a28a46082b7d.jpg,top shelf; price not visible in photo
+V-4,R0,C1,Rockstar energy drink,drink,can,,,data/photos/V-4/76825f17ef7b57d49894a28a46082b7d.jpg,
+V-4,R0,D1,Starbucks Frappuccino,drink,bottle,,,data/photos/V-4/76825f17ef7b57d49894a28a46082b7d.jpg,
+V-4,R0,E1,Aquafina water,drink,,,,data/photos/V-4/76825f17ef7b57d49894a28a46082b7d.jpg,bottom shelf
+V-4,R0,E6,LIFEWTR,drink,,,,data/photos/V-4/76825f17ef7b57d49894a28a46082b7d.jpg,

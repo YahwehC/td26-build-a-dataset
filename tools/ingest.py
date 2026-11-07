@@ -39,6 +39,11 @@ def exif_time(img):
 
 def ingest_photos(place_ids):
     rows, problems = [], []
+    # Keep hand-written captions / times from an earlier run (re-ingest must not wipe them).
+    old = {}
+    if PHOTOS_CSV.exists():
+        with open(PHOTOS_CSV, newline="", encoding="utf-8-sig") as f:
+            old = {r["file"]: r for r in csv.DictReader(f)}
     for folder in sorted(p for p in RAW.iterdir() if p.is_dir()):
         if folder.name not in place_ids:
             problems.append(f"unknown place folder {folder.name}")
@@ -49,15 +54,20 @@ def ingest_photos(place_ids):
             m = re.match(r"(R\d+)", src.stem, re.I)
             rnd = m.group(1).upper() if m else "R0"
             with Image.open(src) as im:
-                ts = exif_time(im) or datetime.fromtimestamp(src.stat().st_mtime).isoformat(timespec="seconds")
+                # No EXIF (e.g. photos sent via chat apps) -> leave blank; file mtime is the transfer time, not the shot.
+                ts = exif_time(im)
                 im = ImageOps.exif_transpose(im).convert("RGB")
                 im.thumbnail((1600, 1600))
                 dst = OUT / folder.name / (src.stem + ".jpg")
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 im.save(dst, "JPEG", quality=82, optimize=True)  # no exif= argument -> metadata dropped
             caption = re.sub(r"^R\d+[-_ ]*", "", src.stem).replace("-", " ").replace("_", " ").strip()
-            rows.append({"place_id": folder.name, "round": rnd,
-                         "file": dst.relative_to(ROOT).as_posix(), "caption": caption, "ts": ts})
+            if re.fullmatch(r"[0-9a-f]{16,}", caption, re.I):  # hash file names carry no meaning
+                caption = ""
+            file = dst.relative_to(ROOT).as_posix()
+            prev = old.get(file, {})
+            rows.append({"place_id": folder.name, "round": rnd, "file": file,
+                         "caption": caption or prev.get("caption", ""), "ts": ts or prev.get("ts", "")})
     with open(PHOTOS_CSV, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["place_id", "round", "file", "caption", "ts"])
         w.writeheader()
@@ -69,12 +79,12 @@ def ingest_notes(place_ids):
     notes_path = RAW / "field-notes.csv"
     if not notes_path.exists():
         return 0, []
-    obs = list(csv.DictReader(open(OBS_CSV, encoding="utf-8")))
+    obs = list(csv.DictReader(open(OBS_CSV, encoding="utf-8-sig")))
     fields = list(obs[0].keys()) if obs else ["obs_id", "place_id", "round", "ts", "people", "seats_taken", "working",
                                               "cold", "counter", "units", "units_working", "clean", "waiting", "photo", "note"]
     obs = [r for r in obs if not r["obs_id"].startswith("F-")]
     added, problems = 0, []
-    for r in csv.DictReader(open(notes_path, encoding="utf-8")):
+    for r in csv.DictReader(open(notes_path, encoding="utf-8-sig")):
         if not any((r.get(k) or "").strip() for k in VALUE_FIELDS + ["note"]):
             continue
         pid, rnd = r["place_id"].strip(), (r.get("round") or "R0").strip().upper()
@@ -105,7 +115,7 @@ def ingest_notes(place_ids):
 
 
 def main():
-    place_ids = {r["place_id"] for r in csv.DictReader(open(PLACES_CSV, encoding="utf-8"))}
+    place_ids = {r["place_id"] for r in csv.DictReader(open(PLACES_CSV, encoding="utf-8-sig"))}
     photos, p1 = ingest_photos(place_ids)
     notes, p2 = ingest_notes(place_ids)
     print(f"photos: {len(photos)} written to data/photos/ and data/photos.csv")

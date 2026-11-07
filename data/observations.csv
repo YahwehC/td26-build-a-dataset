@@ -1,5 +1,8 @@
 obs_id,place_id,round,ts,people,seats_taken,working,cold,counter,units,units_working,clean,waiting,photo,note
 O001,S-A8-R,R0,2026-11-07T14:09:30,19,,,,,,,,,,people count covers all of area 8 (left and right)
 O002,S-A5,R0,2026-11-07T14:11:30,1,,,,,,,,,,
-O003,P-1,R0,2026-11-07T14:00:00,,,,,,3,2,,,,left printer of the three out of order; time about 2 PM
-O004,M-1,R0,2026-11-07T14:00:00,,,,,,4,,,,,4 microwaves; disposable utensils and napkins available nearby; time about 2 PM
+O003,P-1,R0,2026-11-07T14:00:00,,,,,,3,2,,,,left printer of the three out of order (MSC notice on it); time about 2 PM
+O004,M-1,R0,2026-11-07T14:00:00,,,,,,4,,,,,"4 microwaves; disposable utensils, napkins and a condiment rack nearby; sign asks not to microwave fish/seafood; time about 2 PM"
+O005,W-1,R0,2026-11-07T14:00:00,,,,,155082,,,,,,counter read from our close-up photo of the display; time about 2 PM
+O006,W-3,R0,2026-11-07T14:00:00,,,,,119842,,,,,,counter read from our close-up photo of the display; time about 2 PM
+O007,W-4,R0,2026-11-07T14:00:00,,,,,151370,,,,,,counter read from our close-up photo of the display; time about 2 PM

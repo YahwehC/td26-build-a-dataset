@@ -18,6 +18,12 @@ Then open http://localhost:8000. The app is static (HTML/CSS/JS, PapaParse from 
 | Path | What it is |
 |---|---|
 | `index.html`, `app.js`, `style.css` | The map app |
+| `iso.js` | Turns the flat plan into an isometric 2.5D view (extruded rooms, flat/3D toggle) |
+| `model3d.js` | Small 3D models of each amenity (Three.js), drawn by our code from our measurements, not from downloaded models |
+| `data/photos.csv`, `data/photos/` | Our field photos (EXIF/GPS removed, resized), one row per photo |
+| `data/vending_items.csv` | Products and prices, read by us from our vending-machine photos |
+| `tools/ingest.py` | Processes raw photos and field notes of a round into `data/` |
+| `tools/check_data.py` | Data-quality checks run after every round (IDs, ranges, counters, files) |
 | `assets/msc-floor1.svg` | Schematic 1st-floor plan, hand-traced by us from a photo of the MSC directory sign |
 | `data/places.csv` | Every place we logged, with its position on the plan |
 | `data/noise.csv` | Sound-level measurements (one row per measurement) |
@@ -87,6 +93,31 @@ Then open http://localhost:8000. The app is static (HTML/CSS/JS, PapaParse from 
 | `waiting` | People waiting in line |
 | `photo` | Path to the photo taken at this observation |
 | `note` | Remarks |
+
+### `data/photos.csv`
+| Field | Meaning |
+|---|---|
+| `place_id`, `round` | As above |
+| `file` | Processed photo path (`data/photos/<place_id>/...`) |
+| `caption` | What the photo shows |
+| `ts` | Time taken (from the photo, local time) |
+
+### `data/vending_items.csv`
+| Field | Meaning |
+|---|---|
+| `place_id`, `round` | Machine and round of the photo |
+| `slot` | Slot code printed on the machine (e.g. `A3`) |
+| `product`, `category`, `size` | Product as labelled, our category (drink, snack, …), size if shown |
+| `price_usd` | Price shown for the slot |
+| `sold_out` | `y` if the slot is empty in the photo |
+| `source_photo` | The photo this row was read from, so every value can be checked |
+
+## Processing a round
+```bash
+python tools/ingest.py        # photos: strip EXIF/GPS, resize, list in photos.csv; merge field-notes.csv
+python tools/parse_noise.py   # noise PDFs -> data/noise.csv
+python tools/check_data.py    # validation; exit code 1 on errors
+```
 
 ## Limitations
 - **One floor, one weekend.** Saturday and Sunday during a hackathon are not a typical weekday; game days
