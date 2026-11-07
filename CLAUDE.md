@@ -43,6 +43,13 @@ User speaks Chinese → answer in Chinese; code, docs, specs in English. Delegat
 - v2 TODO: show area names from areas.csv; photo gallery; merge field-notes; Flag Room labels overlap; markers small on phones; a Flag Room within-room noise comparison.
 - Local preview: `python -m http.server 8765 --bind 127.0.0.1` (the preview_start launch.json would have to live in the root `.claude/`, so it isn't used).
 
+## App v2 (2026-11-07 evening, commit 695c483)
+- **Front-end code is written by Claude, not DeepSeek (user rule).** Specs 002/003 were cancelled; they still describe the APIs.
+- `iso.js`: SVG isometric 2.5D renderer (flat/3D toggle, grow-in rooms, `IsoMap.project/elevationAt/onFrame`). `model3d.js`: procedural Three.js r160 models (vending/water/microwave/printer) built from our data; lazy-loaded by the "View in 3D" button. Sketchfab was blocked (403), so there are no third-party models.
+- `app.js`: loads all CSVs (photos/vending_items optional), markers at constant pixel size, quiet ranking with FLIP animation, vending search, details with photo lightbox and a measurement table with PDF links, water counter → bottles/hour.
+- Photos: put them in `data/raw/photos/<place_id>/R<n>-*.jpg` + `field-notes.csv`, then run `.venv\Scripts\python.exe tools/ingest.py` (strips EXIF, resizes, fills photos.csv, merges notes). Vending products: Claude reads the photos → `data/vending_items.csv` with `source_photo`.
+- Open: confirm Howdy room left/right placement; README needs v2 files.
+
 ## Status
 - [x] Guide saved, ideas + prior-art research, concept chosen, team brief written.
 - [ ] Collection tool (phone form → CSV), schema in team brief.
