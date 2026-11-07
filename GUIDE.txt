@@ -1,0 +1,52 @@
+﻿Build Your Own Dataset
+TAMU Datathon | Participant Challenge Guide
+Great software starts with a good question. For this challenge, your team must leave the screen, collect original data from the real world during TAMU Datathon, and turn that data into a usable, interactive application.
+The Challenge
+Find something worth observing, measuring, counting, photographing, recording, or asking people about. Collect and document a dataset yourselves, then use it as an essential part of an application people can actually interact with. The collection process should be genuine, and the data should drive a meaningful feature, not merely appear in a screenshot or decorative chart.
+There is no required dataset size or prescribed tech stack. A smaller, carefully collected dataset powering a thoughtful application can be stronger than a huge, low-quality one.
+Rules & Eligibility
+1. Collect new primary data during the hackathon. The primary dataset must be gathered by your team during the event, not recycled from earlier projects.
+2. Engage with the physical world. Your observations can come from places, objects, environmental conditions, movement, sounds, images, or consenting participants. Use lawful, safe collection methods.
+3. Build a functioning, interactive application. Websites, mobile apps, games, maps, and interactive tools qualify. A static report, standalone notebook, dashboard screenshot, or trained model without a usable interface does not.
+4. Make your own data central. Public datasets, APIs, and web scraping may supplement your work, but they cannot supply the main dataset or substitute for real-world collection.
+5. Document how you gathered the data. Judges should be able to understand your collection location or context, method, timing, sample size, fields, processing, and limitations.
+6. Publish your work. Include the dataset, collection methodology, source code, and instructions to run the app in a GitHub repository. Do not publish private or sensitive information; use anonymized or non-sensitive data instead.
+What Could You Build?
+• Campus accessibility explorer: Survey routes, ramps, doors, and obstacles, then build an interactive campus map that helps users compare accessible paths.
+• Noise or study-space finder: Take time-stamped sound readings in permitted public spaces, then build a searchable tool for finding quieter study spots.
+• Foot-traffic insights: Count pedestrian activity at multiple public locations and times, then build an interactive crowd-pattern or route-planning tool.
+• Local biodiversity spotter: Record plant or animal sightings without disturbing habitats, then build an identification, mapping, or exploration app.
+• Campus wait-time tracker: Observe queues at permitted locations, then build an app that visualizes patterns and lets users explore likely busy periods.
+• Community preference explorer: Conduct an optional, consent-based survey without collecting identifying details, then build an interactive comparison or recommendation tool.
+These are starting points, not restrictions. Original ideas and inventive ways of collecting data are encouraged.
+What Does Not Qualify?
+• Downloading a Kaggle dataset and building an app around it.
+• Primarily scraping websites or calling third-party APIs, with little or no new physical-world data collection.
+• Reusing data collected before the hackathon as your primary dataset.
+• Submitting only a written analysis, static visualization, or ML model without an interactive application.
+• Fabricating observations, presenting generated data as real measurements, or misrepresenting how data was collected.
+Required Devpost Submission
+Submit both of the following through your TAMU Datathon Devpost project before the event's submission deadline:
+1. GitHub repository link: Include your application source code, newly collected dataset (in a safe, shareable format), README with setup/run instructions, collection methodology, data dictionary or field descriptions, and a brief discussion of limitations. Clearly label any supplementary public or synthetic data.
+2. Two-minute demonstration video: Show (a) how and where your team collected real-world data, (b) what the dataset contains, and (c) the working application in action, including how its features use the collected data. Aim for approximately 2 minutes; keep the video focused and accessible to judges.
+A polished deployment is optional unless otherwise required by general event rules, but judges must be able to understand and evaluate how the application works through your repository and video.
+Judging Rubric (100 Points)
+Data Collection & Quality — 20 points. Originality and rigor of the collection process, sensible sampling, accurate records, and clear documentation.
+Application Functionality & Data Integration — 20 points. Usable interactive experience, reliable behavior, and meaningful dependence on the collected dataset.
+Creativity & Originality — 20 points. Inventiveness of the question, collection method, solution, and user experience.
+Usefulness & Impact — 20 points. Relevance to a real need or interesting insight, practical value, and thoughtful treatment of data limitations.
+Communication & Presentation — 20 points. Clarity of the video, explanation of the collection process and app, and understandable repository documentation.
+Judges will assess quality and execution, not simply dataset size, complexity of the technology, or production polish.
+Collect Data Responsibly
+• Respect privacy and consent. Ask permission before interviewing, surveying, photographing, or recording identifiable people. Avoid collecting personal or sensitive information unless strictly necessary and appropriately consented to; the safer default is not to collect it.
+• Respect property and venue rules. Collect only where permitted; do not enter restricted spaces or interfere with staff, customers, classes, traffic, or other events.
+• Stay safe. Do not collect data in roads, hazardous areas, or situations that place anyone at risk. Never disturb wildlife or damage property.
+• Be transparent. Explain collection methods honestly; do not fabricate, secretly record, or mislabel data. Clearly distinguish measured, estimated, simulated, and externally sourced values.
+• Share responsibly. Remove identifying details, precise sensitive locations, credentials, and other restricted information before publishing the repository or video. If raw data cannot be safely published, collect a safe dataset or provide a properly anonymized version.
+Before You Submit
+□ We gathered our primary dataset ourselves during TAMU Datathon.
+□ Our application is functional, interactive, and meaningfully uses our dataset.
+□ Our GitHub repository contains the shareable dataset, methodology, code, and setup instructions.
+□ Our Devpost submission includes the GitHub link and a roughly 2-minute video of collection and application demo.
+□ We followed applicable venue rules, respected consent, and removed sensitive information.
+Go outside. Notice something interesting. Measure it. Build something that would not exist without your data.
