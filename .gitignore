@@ -9,3 +9,10 @@ pip-*/
 .env.*
 *.log
 .DS_Store
+
+# raw field photos may contain GPS metadata; publish only the cleaned copies made by tools/ingest.py
+data/raw/photos/**/*.jpg
+data/raw/photos/**/*.jpeg
+data/raw/photos/**/*.png
+data/raw/photos/**/*.heic
+data/raw/photos/**/*.webp

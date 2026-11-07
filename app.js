@@ -1,1299 +1,643 @@
+/* MSC Field Map: app logic. Loads our CSVs, draws markers on the isometric plan (iso.js),
+ * and drives the ranking, vending search, details, photo lightbox and 3D viewer (model3d.js). */
 (() => {
   'use strict';
 
-  const SVG_NS = 'http://www.w3.org/2000/svg';
-  const LATEST = '__latest__';
-  const LAYER_ORDER = ['study', 'water', 'vending', 'microwave', 'printer'];
-  const LAYER_META = {
-    study: { label: 'Study places', singular: 'Study place' },
-    water: { label: 'Water fillers', singular: 'Water filler' },
-    vending: { label: 'Vending', singular: 'Vending machine' },
-    microwave: { label: 'Microwaves', singular: 'Microwave' },
-    printer: { label: 'Printers', singular: 'Printer' }
-  };
-  const LAYER_COLORS = {
-    water: 'var(--water)',
-    vending: 'var(--vending)',
-    microwave: 'var(--microwave)',
-    printer: 'var(--printer)'
-  };
-  const LAYER_LETTERS = {
-    water: 'W',
-    vending: 'V',
-    microwave: 'M',
-    printer: 'P'
-  };
-  const BANDS = [
-    { key: 'quiet', label: 'Quiet', variable: '--quiet', max: 50 },
-    { key: 'moderate', label: 'Moderate', variable: '--moderate', max: 60 },
-    { key: 'loud', label: 'Loud', variable: '--loud', max: 70 },
-    { key: 'vloud', label: 'Very loud', variable: '--vloud', max: Infinity }
+  const NS = 'http://www.w3.org/2000/svg';
+  const LATEST = 'latest';
+  const LAYERS = [
+    { key: 'study', label: 'Study places', one: 'Study place', color: 'var(--quiet)' },
+    { key: 'water', label: 'Water fillers', one: 'Water filler', color: 'var(--water)', letter: 'W' },
+    { key: 'vending', label: 'Vending', one: 'Vending machine', color: 'var(--vending)', letter: 'V' },
+    { key: 'microwave', label: 'Microwaves', one: 'Microwaves', color: 'var(--microwave)', letter: 'M' },
+    { key: 'printer', label: 'Printers', one: 'Printers', color: 'var(--printer)', letter: 'P' }
   ];
-  const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const LAYER = Object.fromEntries(LAYERS.map((l) => [l.key, l]));
+  const BANDS = [
+    { key: 'quiet', label: 'Quiet', max: 50 },
+    { key: 'moderate', label: 'Moderate', max: 60 },
+    { key: 'loud', label: 'Loud', max: 70 },
+    { key: 'vloud', label: 'Very loud', max: Infinity }
+  ];
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const state = {
-    places: [],
-    noise: [],
-    observations: [],
-    rounds: [],
-    activeRound: LATEST,
-    visibleLayers: new Set(LAYER_ORDER),
-    glow: true,
-    scale: 1,
-    pxPerUnit: 1,
-    selectedPlaceId: null,
-    activeTab: 'quiet',
-    svg: null,
-    markersGroup: null,
-    resizeObserver: null
+  const S = {
+    places: [], byId: new Map(), areas: new Map(),
+    noise: [], obs: [], photos: [], items: [],
+    rounds: [], round: LATEST,
+    visible: new Set(LAYERS.map((l) => l.key)), glow: true,
+    selected: null, tab: 'quiet', vendingQuery: '',
+    svg: null, markers: new Map(), markerLayer: null, firstPaint: true
   };
+  const $ = (id) => document.getElementById(id);
 
-  const dom = {};
-
-  function init() {
-    cacheDom();
-    bindStaticEvents();
-    setTab('quiet');
-    loadData().catch(showServerMessage);
-  }
-
-  function cacheDom() {
-    dom.map = document.getElementById('map');
-    dom.mapFrame = document.querySelector('.map-frame');
-    dom.tooltip = document.getElementById('marker-tooltip');
-    dom.quietList = document.getElementById('quiet-list');
-    dom.detailsContent = document.getElementById('details-content');
-    dom.roundControl = document.getElementById('round-control');
-    dom.glowToggle = document.getElementById('glow-toggle');
-    dom.tabQuiet = document.getElementById('tab-quiet');
-    dom.tabDetails = document.getElementById('tab-details');
-    dom.panelQuiet = document.getElementById('panel-quiet');
-    dom.panelDetails = document.getElementById('panel-details');
-    dom.layerButtons = Array.from(document.querySelectorAll('[data-layer]'));
-    dom.countElements = Array.from(document.querySelectorAll('[data-count-for]'));
-  }
-
-  function bindStaticEvents() {
-    dom.layerButtons.forEach((button) => {
-      button.addEventListener('click', () => toggleLayer(button.dataset.layer));
-    });
-
-    dom.glowToggle.addEventListener('click', () => {
-      state.glow = !state.glow;
-      dom.glowToggle.setAttribute('aria-pressed', String(state.glow));
-      renderMarkers();
-    });
-
-    dom.tabQuiet.addEventListener('click', () => setTab('quiet'));
-    dom.tabDetails.addEventListener('click', () => setTab('details'));
-    [dom.tabQuiet, dom.tabDetails].forEach((tab) => {
-      tab.addEventListener('keydown', handleTabKeydown);
-    });
-  }
-
-  async function loadData() {
-    if (!window.Papa || typeof window.Papa.parse !== 'function') {
-      throw new Error('PapaParse did not load.');
+  /* ---------------- data ---------------- */
+  async function text(url, optional = false) {
+    try {
+      const r = await fetch(url, { cache: 'no-cache' });
+      if (!r.ok) throw new Error(url + ' → HTTP ' + r.status);
+      return await r.text();
+    } catch (e) {
+      if (optional) return '';
+      throw e;
     }
+  }
+  const csv = (t) => (t ? Papa.parse(t.replace(/^﻿/, ''), { header: true, skipEmptyLines: true }).data : [])
+    .map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [String(k).trim(), String(v ?? '').trim()])));
+  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+  const time = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d : null; };
 
-    const [svgText, placesText, noiseText, observationsText] = await Promise.all([
-      fetchText('assets/msc-floor1.svg'),
-      fetchText('data/places.csv'),
-      fetchText('data/noise.csv'),
-      fetchText('data/observations.csv')
+  async function load() {
+    const [svgText, places, noise, obs, areas, photos, items] = await Promise.all([
+      text('assets/msc-floor1.svg'), text('data/places.csv'), text('data/noise.csv'), text('data/observations.csv'),
+      text('data/areas.csv', true), text('data/photos.csv', true), text('data/vending_items.csv', true)
     ]);
-
-    state.places = parsePlaces(placesText);
-    if (!state.places.length) {
-      throw new Error('places.csv did not contain any usable places.');
-    }
-
-    const knownPlaceIds = new Set(state.places.map((place) => place.place_id));
-    state.noise = parseNoise(noiseText, knownPlaceIds);
-    state.observations = parseObservations(observationsText, knownPlaceIds);
-    state.rounds = collectRounds();
-    state.selectedPlaceId = null;
-
-    installMap(svgText);
-    measureScale();
-    updateCounts();
-    renderRoundControl();
-    updateLayerButtons();
-    setTab('quiet');
-    renderMarkers();
-    renderQuietList();
-    renderDetails();
-    setupResizeObserver();
+    S.places = csv(places).map((p) => ({ ...p, x: num(p.x), y: num(p.y), area: p.area ? Number(p.area) : null }))
+      .filter((p) => p.place_id && LAYER[p.layer] && p.x != null && p.y != null);
+    S.byId = new Map(S.places.map((p) => [p.place_id, p]));
+    const known = (r) => { if (S.byId.has(r.place_id)) return true; console.warn('Unknown place_id', r.place_id); return false; };
+    csv(areas).forEach((a) => S.areas.set(Number(a.area), a.name));
+    S.noise = csv(noise).filter(known).map((r) => ({ ...r, t: time(r.ts), laeq: num(r.laeq_db), lmax: num(r.lmax_db), lcpeak: num(r.lcpeak_db), dur: num(r.duration_s) }));
+    S.obs = csv(obs).filter(known).map((r) => ({ ...r, t: time(r.ts) }));
+    S.photos = csv(photos).filter(known).map((r) => ({ ...r, t: time(r.ts) }));
+    S.obs.filter((o) => o.photo).forEach((o) => S.photos.push({ place_id: o.place_id, round: o.round, file: o.photo, caption: o.note, t: o.t }));
+    S.items = csv(items).filter(known).map((r) => ({ ...r, price: num(r.price_usd) }));
+    const rs = new Set([...S.noise, ...S.obs, ...S.photos, ...S.items].map((r) => r.round).filter(Boolean));
+    S.rounds = [...rs].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+    return svgText;
   }
 
-  async function fetchText(url) {
-    const response = await fetch(url, { cache: 'no-cache' });
-    if (!response.ok) {
-      throw new Error(`Could not load ${url} (HTTP ${response.status}).`);
-    }
-    return response.text();
+  /* ---------------- selection of values per round ---------------- */
+  const inRound = (rows) => (S.round === LATEST ? rows : rows.filter((r) => r.round === S.round));
+  function latest(rows) {
+    return rows.reduce((best, r) => {
+      if (!best) return r;
+      const a = best.t ? best.t.getTime() : 0, b = r.t ? r.t.getTime() : 0;
+      if (b !== a) return b > a ? r : best;
+      return r.round.localeCompare(best.round, 'en', { numeric: true }) > 0 ? r : best;
+    }, null);
   }
-
-  function showServerMessage(error) {
-    if (error) {
-      console.warn('MSC Field Map could not load its data:', error.message || error);
-    }
-    if (state.resizeObserver) {
-      state.resizeObserver.disconnect();
-      state.resizeObserver = null;
-    }
-    hideTooltip();
-    if (!dom.map) return;
-
-    const wrapper = el('div', { className: 'map-error', attrs: { role: 'alert' } });
-    wrapper.append(el('h2', { text: 'Couldn’t load the map' }));
-
-    const message = el('p');
-    message.append(
-      document.createTextNode('Open this app through a web server: run '),
-      el('code', { text: 'python -m http.server' }),
-      document.createTextNode(' in the repo folder and visit '),
-      el('a', {
-        attrs: {
-          href: 'http://localhost:8000',
-          target: '_blank',
-          rel: 'noopener noreferrer'
-        },
-        text: 'http://localhost:8000'
-      }),
-      document.createTextNode('.')
-    );
-    wrapper.append(message);
-    dom.map.replaceChildren(wrapper);
-
-    if (dom.quietList) {
-      dom.quietList.replaceChildren(emptyListItem('Measurements are unavailable until the data files load.'));
-    }
-    if (dom.detailsContent) {
-      dom.detailsContent.replaceChildren(el('p', {
-        className: 'empty-state',
-        text: 'Measurements are unavailable until the data files load.'
-      }));
-    }
+  const noiseFor = (id) => latest(inRound(S.noise.filter((n) => n.place_id === id && n.laeq != null)));
+  const obsFor = (id) => latest(inRound(S.obs.filter((o) => o.place_id === id)));
+  // An amenity's state: newest value of each field within the selected round (fields come from different rows).
+  function stateFor(id) {
+    const rows = inRound(S.obs.filter((o) => o.place_id === id)).sort((a, b) => (a.t?.getTime() || 0) - (b.t?.getTime() || 0));
+    const out = {};
+    rows.forEach((r) => Object.entries(r).forEach(([k, v]) => { if (v !== '' && v != null) out[k] = v; }));
+    return out;
   }
+  function itemsFor(id) {
+    const all = S.items.filter((i) => i.place_id === id);
+    if (S.round !== LATEST) return all.filter((i) => i.round === S.round);
+    const last = all.map((i) => i.round).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).pop();
+    return all.filter((i) => i.round === last);
+  }
+  const photosFor = (id) => S.photos.filter((p) => p.place_id === id)
+    .sort((a, b) => b.round.localeCompare(a.round, 'en', { numeric: true }) || (b.t?.getTime() || 0) - (a.t?.getTime() || 0));
+  const band = (db) => (db == null ? null : BANDS.find((b) => db < b.max));
+  const areaName = (p) => (p.area ? `Area ${p.area}${S.areas.get(p.area) ? ' · ' + S.areas.get(p.area) : ''}` : '');
+  function fmtTime(d) {
+    if (!d) return '—';
+    let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${DAYS[d.getDay()]} ${h}:${m} ${ap}`;
+  }
+  const money = (v) => (v == null ? '—' : '$' + v.toFixed(2));
 
-  function el(tag, options = {}, ...children) {
-    const node = document.createElement(tag);
-    if (options.className) node.className = options.className;
-    if (options.text !== undefined) node.textContent = String(options.text);
-    if (options.attrs) {
-      Object.entries(options.attrs).forEach(([name, value]) => {
-        if (value !== undefined && value !== null) {
-          node.setAttribute(name, String(value));
-        }
-      });
-    }
-    children.forEach((child) => {
-      if (child !== undefined && child !== null) node.append(child);
+  /* ---------------- DOM helpers ---------------- */
+  function h(tag, attrs = {}, ...kids) {
+    const n = document.createElement(tag);
+    Object.entries(attrs).forEach(([k, v]) => {
+      if (v == null || v === false) return;
+      if (k === 'class') n.className = v;
+      else if (k === 'style') n.setAttribute('style', v);
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v === true ? '' : v);
     });
-    return node;
+    kids.flat().forEach((c) => { if (c != null && c !== false) n.append(c instanceof Node ? c : document.createTextNode(String(c))); });
+    return n;
+  }
+  function s(tag, attrs = {}, parent) {
+    const n = document.createElementNS(NS, tag);
+    Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+    if (parent) parent.appendChild(n);
+    return n;
   }
 
-  function svgEl(tag, attributes = {}, text) {
-    const node = document.createElementNS(SVG_NS, tag);
-    Object.entries(attributes).forEach(([name, value]) => {
-      if (value !== undefined && value !== null) {
-        node.setAttribute(name, String(value));
+  /* ---------------- controls ---------------- */
+  function renderChips() {
+    const nav = $('layer-chips');
+    nav.replaceChildren(...LAYERS.map((l, i) => h('button', {
+      type: 'button', class: 'chip', 'aria-pressed': String(S.visible.has(l.key)), style: `--chip-color:${l.color};--delay:${120 + i * 45}ms`,
+      onclick: (e) => {
+        S.visible.has(l.key) ? S.visible.delete(l.key) : S.visible.add(l.key);
+        e.currentTarget.setAttribute('aria-pressed', String(S.visible.has(l.key)));
+        applyVisibility();
+        renderQuiet();
       }
-    });
-    if (text !== undefined) node.textContent = String(text);
-    return node;
-  }
-
-  function trim(value) {
-    if (value === undefined || value === null) return '';
-    return String(value).trim();
-  }
-
-  function parseNumber(value) {
-    const text = trim(value);
-    if (!text) return null;
-    const number = parseFloat(text);
-    return Number.isFinite(number) ? number : null;
-  }
-
-  function stripBom(text) {
-    return String(text).replace(/^\uFEFF/, '');
-  }
-
-  function parseCsv(text) {
-    const result = window.Papa.parse(stripBom(text), {
-      header: true,
-      skipEmptyLines: true
-    });
-    return Array.isArray(result.data) ? result.data : [];
-  }
-
-  function parsePlaces(text) {
-    const places = [];
-    parseCsv(text).forEach((row, index) => {
-      const placeId = trim(row.place_id);
-      const layer = trim(row.layer);
-      const name = trim(row.name);
-      const x = parseNumber(row.x);
-      const y = parseNumber(row.y);
-
-      if (!placeId) {
-        console.warn(`places.csv row ${index + 2} has no place_id; ignoring.`);
-        return;
+    }, h('span', { class: 'dot', 'aria-hidden': 'true' }), l.label, h('span', { class: 'count' }, S.places.filter((p) => p.layer === l.key).length))),
+    h('button', {
+      type: 'button', class: 'chip', 'aria-pressed': 'true', style: '--chip-color:radial-gradient(circle,var(--loud),transparent 75%);--delay:360ms',
+      onclick: (e) => {
+        S.glow = !S.glow;
+        e.currentTarget.setAttribute('aria-pressed', String(S.glow));
+        $('map').classList.toggle('no-glow', !S.glow);
       }
-      if (!LAYER_META[layer]) {
-        console.warn(`places.csv row ${index + 2} has unknown layer "${layer}"; ignoring.`);
-        return;
-      }
-      if (x === null || y === null) {
-        console.warn(`places.csv row ${index + 2} has invalid x/y; ignoring.`);
-        return;
-      }
-
-      places.push({
-        place_id: placeId,
-        layer,
-        name: name || placeId,
-        area: trim(row.area),
-        x,
-        y,
-        location_note: trim(row.location_note),
-        seats_total: parseNumber(row.seats_total),
-        outlets: parseNumber(row.outlets),
-        note: trim(row.note)
-      });
-    });
-    return places;
+    }, h('span', { class: 'dot', 'aria-hidden': 'true' }), 'Noise glow'));
   }
 
-  function parseNoise(text, knownPlaceIds) {
-    const rows = [];
-    parseCsv(text).forEach((row, index) => {
-      const placeId = trim(row.place_id);
-      if (!knownPlaceIds.has(placeId)) {
-        console.warn(`noise.csv row ${index + 2} has unknown place_id "${placeId}"; ignoring.`);
-        return;
-      }
-      const ts = trim(row.ts);
-      rows.push({
-        obs_id: trim(row.obs_id),
-        place_id: placeId,
-        round: trim(row.round),
-        ts,
-        tsMs: parseLocalTimestamp(ts),
-        duration_s: parseNumber(row.duration_s),
-        laeq_db: parseNumber(row.laeq_db),
-        lmax_db: parseNumber(row.lmax_db),
-        lcpeak_db: parseNumber(row.lcpeak_db),
-        device: trim(row.device),
-        app: trim(row.app),
-        source_file: trim(row.source_file),
-        note: trim(row.note),
-        rowIndex: index
-      });
-    });
-    return rows;
+  function renderRounds() {
+    const seg = $('round-control');
+    const opts = [[LATEST, 'Latest'], ...S.rounds.map((r) => [r, r])];
+    seg.replaceChildren(...opts.map(([v, label]) => h('button', {
+      type: 'button', 'aria-pressed': String(S.round === v),
+      onclick: () => { if (S.round === v) return; S.round = v; renderRounds(); refreshAll(true); }
+    }, label)));
   }
 
-  function parseObservations(text, knownPlaceIds) {
-    const rows = [];
-    parseCsv(text).forEach((row, index) => {
-      const placeId = trim(row.place_id);
-      if (!knownPlaceIds.has(placeId)) {
-        console.warn(`observations.csv row ${index + 2} has unknown place_id "${placeId}"; ignoring.`);
-        return;
-      }
-      const ts = trim(row.ts);
-      rows.push({
-        obs_id: trim(row.obs_id),
-        place_id: placeId,
-        round: trim(row.round),
-        ts,
-        tsMs: parseLocalTimestamp(ts),
-        people: parseNumber(row.people),
-        seats_taken: parseNumber(row.seats_taken),
-        working: trim(row.working),
-        cold: parseNumber(row.cold),
-        counter: parseNumber(row.counter),
-        units: parseNumber(row.units),
-        units_working: parseNumber(row.units_working),
-        clean: parseNumber(row.clean),
-        waiting: parseNumber(row.waiting),
-        photo: trim(row.photo),
-        note: trim(row.note),
-        rowIndex: index
-      });
-    });
-    return rows;
+  function bindView() {
+    const buttons = document.querySelectorAll('#view-toggle button');
+    const sync = () => buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === IsoMap.getMode())));
+    buttons.forEach((b) => b.addEventListener('click', () => { IsoMap.setMode(b.dataset.mode); sync(); }));
+    sync();
   }
 
-  function parseLocalTimestamp(value) {
-    const text = trim(value);
-    if (!text) return NaN;
-    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
-    if (!match) {
-      const fallback = new Date(text);
-      return Number.isNaN(fallback.getTime()) ? NaN : fallback.getTime();
-    }
-    const date = new Date(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      Number(match[4]),
-      Number(match[5]),
-      Number(match[6] || 0)
-    );
-    return date.getTime();
-  }
-
-  function collectRounds() {
-    const rounds = new Set();
-    state.noise.forEach((row) => {
-      if (row.round) rounds.add(row.round);
-    });
-    state.observations.forEach((row) => {
-      if (row.round) rounds.add(row.round);
-    });
-    return Array.from(rounds).sort(compareRounds);
-  }
-
-  function compareRounds(a, b) {
-    return String(a).localeCompare(String(b), undefined, {
-      numeric: true,
-      sensitivity: 'base'
-    });
-  }
-
+  /* ---------------- map + markers ---------------- */
   function installMap(svgText) {
-    const parser = new DOMParser();
-    const parsed = parser.parseFromString(svgText, 'image/svg+xml');
-    if (parsed.querySelector('parsererror')) {
-      throw new Error('The floor-plan SVG could not be parsed.');
-    }
-    const source = parsed.documentElement;
-    if (!source || source.tagName.toLowerCase() !== 'svg') {
-      throw new Error('The floor-plan asset was not an SVG.');
-    }
-
-    const svg = document.importNode(source, true);
-    svg.setAttribute('role', 'group');
-    svg.setAttribute('aria-label', 'Schematic plan of the MSC 1st floor');
-
-    const defs = createGlowDefs();
-    svg.appendChild(defs);
-
-    const markersGroup = svgEl('g', { id: 'markers' });
-    svg.appendChild(markersGroup);
-
-    dom.map.replaceChildren(svg);
-    state.svg = svg;
-    state.markersGroup = markersGroup;
+    const map = $('map');
+    map.innerHTML = svgText;
+    S.svg = map.querySelector('svg');
+    S.svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    IsoMap.attach(S.svg);
+    S.markerLayer = s('g', { id: 'markers' }, S.svg);
+    buildMarkers();
+    IsoMap.onFrame(positionMarkers);
+    new ResizeObserver(() => positionMarkers()).observe(map);
+    positionMarkers();
   }
 
-  function createGlowDefs() {
-    const defs = svgEl('defs');
-    BANDS.forEach((band) => {
-      const gradient = svgEl('radialGradient', { id: `noise-glow-${band.key}` });
-      const center = svgEl('stop', {
-        offset: '0%',
-        'stop-color': readCssVariable(band.variable),
-        'stop-opacity': '0.45'
-      });
-      const edge = svgEl('stop', {
-        offset: '100%',
-        'stop-color': readCssVariable(band.variable),
-        'stop-opacity': '0'
-      });
-      gradient.append(center, edge);
-      defs.append(gradient);
-    });
-    return defs;
-  }
-
-  function readCssVariable(name) {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return value || '#9aa5a0';
-  }
-
-  function updateCounts() {
-    const counts = Object.fromEntries(LAYER_ORDER.map((layer) => [layer, 0]));
-    state.places.forEach((place) => {
-      counts[place.layer] += 1;
-    });
-    dom.countElements.forEach((node) => {
-      const layer = node.dataset.countFor;
-      node.textContent = String(counts[layer] || 0);
-    });
-  }
-
-  function renderRoundControl() {
-    dom.roundControl.replaceChildren(
-      makeRoundButton(LATEST, 'Latest'),
-      ...state.rounds.map((round) => makeRoundButton(round, round))
-    );
-    updateRoundButtons();
-  }
-
-  function makeRoundButton(value, label) {
-    const button = el('button', {
-      className: 'round-button',
-      text: label,
-      attrs: {
-        type: 'button',
-        'aria-pressed': String(state.activeRound === value)
-      }
-    });
-    button.addEventListener('click', () => {
-      if (state.activeRound === value) return;
-      state.activeRound = value;
-      updateRoundButtons();
-      renderMarkers();
-      renderQuietList();
-      renderDetails();
-    });
-    return button;
-  }
-
-  function updateRoundButtons() {
-    dom.roundControl.querySelectorAll('.round-button').forEach((button, index) => {
-      const value = index === 0 ? LATEST : state.rounds[index - 1];
-      button.setAttribute('aria-pressed', String(state.activeRound === value));
-    });
-  }
-
-  function updateLayerButtons() {
-    dom.layerButtons.forEach((button) => {
-      const layer = button.dataset.layer;
-      const visible = state.visibleLayers.has(layer);
-      button.setAttribute('aria-pressed', String(visible));
-      button.title = `${visible ? 'Hide' : 'Show'} ${LAYER_META[layer].label.toLowerCase()}`;
-    });
-    dom.glowToggle.setAttribute('aria-pressed', String(state.glow));
-    dom.glowToggle.title = `${state.glow ? 'Hide' : 'Show'} the study-place noise glow`;
-  }
-
-  function toggleLayer(layer) {
-    if (!LAYER_META[layer]) return;
-    if (state.visibleLayers.has(layer)) {
-      state.visibleLayers.delete(layer);
-    } else {
-      state.visibleLayers.add(layer);
-    }
-    updateLayerButtons();
-    renderMarkers();
-    renderQuietList();
-  }
-
-  function currentNoiseFor(placeId) {
-    const records = state.noise.filter((row) => row.place_id === placeId);
-    if (state.activeRound === LATEST) return latestByTimestamp(records);
-    return latestByTimestamp(records.filter((row) => row.round === state.activeRound));
-  }
-
-  function currentObservationFor(placeId) {
-    const records = state.observations.filter((row) => row.place_id === placeId);
-    if (state.activeRound === LATEST) return latestByTimestamp(records);
-    return latestByTimestamp(records.filter((row) => row.round === state.activeRound));
-  }
-
-  function latestByTimestamp(records) {
-    if (!records.length) return null;
-    let latest = records[0];
-    for (let index = 1; index < records.length; index += 1) {
-      const candidate = records[index];
-      const latestTime = Number.isFinite(latest.tsMs) ? latest.tsMs : -Infinity;
-      const candidateTime = Number.isFinite(candidate.tsMs) ? candidate.tsMs : -Infinity;
-      if (candidateTime > latestTime ||
-          (candidateTime === latestTime && candidate.rowIndex > latest.rowIndex)) {
-        latest = candidate;
-      }
-    }
-    return latest;
-  }
-
-  function bandFor(laeq) {
-    if (!Number.isFinite(laeq)) return null;
-    return BANDS.find((band) => laeq < band.max) || BANDS[BANDS.length - 1];
-  }
-
-  function renderMarkers() {
-    if (!state.markersGroup) return;
-    hideTooltip();
-    state.markersGroup.replaceChildren();
-
-    const scale = state.scale;
-    const glowGroup = svgEl('g', { class: 'noise-glows', 'aria-hidden': 'true' });
-
-    if (state.glow && state.visibleLayers.has('study')) {
-      state.places
-        .filter((place) => place.layer === 'study')
-        .forEach((place) => {
-          const noise = currentNoiseFor(place.place_id);
-          if (!noise || !Number.isFinite(noise.laeq_db)) return;
-          const band = bandFor(noise.laeq_db);
-          if (!band) return;
-          glowGroup.append(svgEl('circle', {
-            class: 'noise-glow',
-            cx: place.x,
-            cy: place.y,
-            r: 70 * scale,
-            fill: `url(#noise-glow-${band.key})`
-          }));
-        });
-    }
-
-    if (glowGroup.childNodes.length) {
-      state.markersGroup.append(glowGroup);
-    }
-
-    const markerLayer = svgEl('g', { class: 'marker-layer' });
-    state.places.forEach((place) => {
-      if (!state.visibleLayers.has(place.layer)) return;
-      markerLayer.append(createMarker(place, scale));
-    });
-    state.markersGroup.append(markerLayer);
-    applySelectionToMarkers();
-  }
-
-  function createMarker(place, scale) {
-    const noise = currentNoiseFor(place.place_id);
-    const observation = currentObservationFor(place.place_id);
-    const description = describePlace(place, noise, observation);
-    const selected = state.selectedPlaceId === place.place_id;
-    const group = svgEl('g', {
-      class: `marker marker--${place.layer}${selected ? ' is-selected' : ''}`,
-      transform: `translate(${place.x} ${place.y})`,
-      tabindex: '0',
-      role: 'button',
-      'aria-label': `${place.name}. ${description}`
-    });
-    group.setAttribute('data-place-id', place.place_id);
-
-    if (place.layer === 'study') {
-      buildStudyMarker(group, noise, scale);
-    } else {
-      buildAmenityMarker(group, place, observation, scale);
-    }
-
-    group.addEventListener('mouseenter', () => showTooltip(group, place.name, description));
-    group.addEventListener('mouseleave', hideTooltip);
-    group.addEventListener('focus', () => showTooltip(group, place.name, description));
-    group.addEventListener('blur', hideTooltip);
-    group.addEventListener('click', (event) => {
-      event.stopPropagation();
-      selectPlace(place.place_id);
-    });
-    group.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
-        event.preventDefault();
-        selectPlace(place.place_id);
-      }
-    });
-    return group;
-  }
-
-  function buildStudyMarker(group, noise, scale) {
-    const laeq = noise && Number.isFinite(noise.laeq_db) ? noise.laeq_db : null;
-    const band = bandFor(laeq);
-    const fill = band ? `var(${band.variable})` : 'var(--unmeasured)';
-
-    const body = svgEl('circle', {
-      class: 'marker-body',
-      r: 16 * scale,
-      'stroke-width': 3 * scale
-    });
-    body.style.fill = fill;
-
-    group.append(
-      svgEl('circle', {
-        class: 'focus-ring',
-        r: 31 * scale,
-        'stroke-width': 2 * scale
-      }),
-      svgEl('circle', {
-        class: 'selection-ring',
-        r: 24 * scale,
-        'stroke-width': 6 * scale
-      }),
-      body,
-      svgEl('text', {
-        class: 'marker-db',
-        x: 0,
-        y: -26 * scale,
-        'font-size': 22 * scale,
-        'aria-hidden': 'true'
-      }, laeq === null ? '—' : String(Math.round(laeq)))
-    );
-  }
-
-  function buildAmenityMarker(group, place, observation, scale) {
-    const boxSize = 26 * scale;
-    const bodyRadius = place.layer === 'water' ? 6 * scale : 2 * scale;
-    const ringSize = 40 * scale;
-
-    const body = svgEl('rect', {
-      class: 'marker-body',
-      x: -boxSize / 2,
-      y: -boxSize / 2,
-      width: boxSize,
-      height: boxSize,
-      rx: bodyRadius,
-      'stroke-width': 2.5 * scale
-    });
-    body.style.fill = LAYER_COLORS[place.layer];
-
-    group.append(
-      svgEl('rect', {
-        class: 'focus-ring',
-        x: -22 * scale,
-        y: -22 * scale,
-        width: 44 * scale,
-        height: 44 * scale,
-        rx: 9 * scale,
-        'stroke-width': 2 * scale
-      }),
-      svgEl('rect', {
-        class: 'selection-ring',
-        x: -20 * scale,
-        y: -20 * scale,
-        width: ringSize,
-        height: ringSize,
-        rx: 7 * scale,
-        'stroke-width': 6 * scale
-      }),
-      body
-    );
-
-    const glyph = svgEl('text', {
-      class: 'marker-glyph',
-      x: 0,
-      y: 0,
-      'aria-hidden': 'true'
-    }, LAYER_LETTERS[place.layer]);
-    glyph.style.fontSize = `${14 * scale}px`;
-    group.append(glyph);
-
-    if (observation && isNotWorking(observation)) {
-      group.append(svgEl('line', {
-        class: 'marker-slash',
-        x1: -10 * scale,
-        y1: 10 * scale,
-        x2: 10 * scale,
-        y2: -10 * scale,
-        'stroke-width': 3 * scale
-      }));
-    }
-  }
-
-  function applySelectionToMarkers() {
-    if (!state.markersGroup) return;
-    state.markersGroup.querySelectorAll('.marker').forEach((marker) => {
-      const selected = marker.getAttribute('data-place-id') === state.selectedPlaceId;
-      marker.classList.toggle('is-selected', selected);
-    });
-  }
-
-  function selectPlace(placeId) {
-    if (!state.places.some((place) => place.place_id === placeId)) return;
-    state.selectedPlaceId = placeId;
-    setTab('details');
-    applySelectionToMarkers();
-    renderQuietList();
-    renderDetails();
-  }
-
-  function describePlace(place, noise, observation) {
-    const parts = [];
-
-    if (place.layer === 'study') {
-      if (noise && Number.isFinite(noise.laeq_db)) {
-        const band = bandFor(noise.laeq_db);
-        parts.push(`${formatDb(noise.laeq_db)}${band ? ` · ${band.label}` : ''}`);
+  function buildMarkers() {
+    // Pop-in order: back to front, after the blocks have grown.
+    const order = [...S.places].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+    order.forEach((p, i) => {
+      const g = s('g', { class: 'marker', 'data-id': p.place_id, 'data-layer': p.layer, tabindex: '0', role: 'button' }, S.markerLayer);
+      const pop = s('g', { class: 'pop' }, g);
+      const enter = s('g', { class: reduced() ? '' : 'enter', style: `--delay:${900 + i * 34}ms` }, pop);
+      const m = { place: p, g, enter, parts: {} };
+      m.parts.shadow = s('ellipse', { class: 'shadow', rx: 9, ry: 3.6 }, enter);
+      if (p.layer === 'study') m.parts.glow = s('ellipse', { class: 'glow', rx: 48, ry: 30, style: `--breathe:${(-i * 0.37).toFixed(2)}s` }, enter);
+      const lift = s('g', { class: 'lift' }, enter);
+      m.parts.stem = s('line', { class: 'stem', x1: 0, y1: 0, x2: 0, y2: -24 }, lift);
+      const head = s('g', { class: 'head-g' }, lift);
+      m.parts.headG = head;
+      if (p.layer === 'study') {
+        m.parts.head = s('circle', { class: 'head', r: 11 }, head);
+        m.parts.db = s('text', { class: 'db', y: -19 }, head);
       } else {
-        parts.push('Noise not measured');
+        m.parts.head = s('rect', { class: 'head', x: -12, y: -12, width: 24, height: 24, rx: 7, fill: LAYER[p.layer].color }, head);
+        s('text', { class: 'glyph-text', y: 1 }, head).textContent = LAYER[p.layer].letter;
+        m.parts.slash = s('line', { class: 'slash', x1: -10, y1: 10, x2: 10, y2: -10, display: 'none' }, head);
       }
-      if (observation && Number.isFinite(observation.people)) {
-        parts.push(personText(observation.people));
+      m.parts.ring = s('circle', { class: 'ring', r: 17 }, head);
+      m.parts.pulse = s('circle', { class: 'ring-pulse', r: 17 }, head);
+      m.parts.badge = s('g', { class: 'badge-g', transform: 'translate(11 -11)', display: 'none' }, head);
+      s('circle', { class: 'badge', r: 6.5 }, m.parts.badge);
+      s('circle', { class: 'badge-lens', r: 2.4 }, m.parts.badge);
+      g.addEventListener('click', () => select(p.place_id, true));
+      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(p.place_id, true); } });
+      g.addEventListener('pointerenter', () => showTip(m));
+      g.addEventListener('pointerleave', hideTip);
+      g.addEventListener('focus', () => showTip(m));
+      g.addEventListener('blur', hideTip);
+      enter.addEventListener('animationend', () => enter.classList.remove('enter'), { once: true });
+      S.markers.set(p.place_id, m);
+    });
+    updateMarkers(false);
+  }
+
+  function unitsPerPx() {
+    const vb = S.svg.viewBox.baseVal;
+    const r = S.svg.getBoundingClientRect();
+    if (!r.width || !r.height) return 1;
+    return Math.max(vb.width / r.width, vb.height / r.height);
+  }
+
+  function positionMarkers() {
+    if (!S.svg) return;
+    const k = unitsPerPx() * (S.svg.getBoundingClientRect().width < 560 ? 0.72 : 1);
+    const morph = IsoMap.morph();
+    const placed = [];
+    S.markers.forEach((m) => {
+      const z = IsoMap.elevationAt(m.place.x, m.place.y);
+      const pt = IsoMap.project(m.place.x, m.place.y, z);
+      m.g.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)}) scale(${k.toFixed(3)})`);
+      const stem = 6 + 20 * morph;
+      m.parts.stem.setAttribute('y2', String(-stem));
+      m.parts.headG.setAttribute('transform', `translate(0 ${-stem})`);
+      m.parts.shadow.setAttribute('opacity', String(0.25 + 0.75 * morph));
+      if (m.parts.glow) m.parts.glow.setAttribute('ry', String(48 * (1 - 0.42 * morph)));
+      placed.push([pt.y, m.g]);
+    });
+    placed.sort((a, b) => a[0] - b[0]).forEach(([, g]) => S.markerLayer.appendChild(g));
+  }
+
+  function tween(from, to, ms, fn) {
+    if (reduced() || from == null || to == null || from === to) { fn(to); return; }
+    const t0 = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / ms);
+      fn(from + (to - from) * (1 - Math.pow(1 - t, 3)));
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function updateMarkers(animate) {
+    S.markers.forEach((m) => {
+      const p = m.place;
+      const hasPhotos = photosFor(p.place_id).length > 0;
+      m.parts.badge.setAttribute('display', hasPhotos ? 'inline' : 'none');
+      if (p.layer === 'study') {
+        const n = noiseFor(p.place_id);
+        const b = band(n?.laeq);
+        const color = b ? `var(--${b.key})` : 'var(--unmeasured)';
+        m.parts.head.setAttribute('fill', color);
+        m.parts.glow.setAttribute('fill', color);
+        m.parts.glow.style.visibility = n ? 'visible' : 'hidden';
+        const to = n ? n.laeq : null;
+        const from = m.db;
+        m.db = to;
+        if (to == null) m.parts.db.textContent = '—';
+        else if (animate) tween(from, to, 420, (v) => { m.parts.db.textContent = Math.round(v); });
+        else m.parts.db.textContent = Math.round(to);
+      } else {
+        const st = stateFor(p.place_id);
+        m.parts.slash.setAttribute('display', st.working === 'n' ? 'inline' : 'none');
       }
-    } else if (place.layer === 'water') {
-      if (observation) {
-        const working = workingWord(observation.working);
-        if (working) parts.push(working);
-        if (Number.isFinite(observation.cold)) parts.push(`Cold ${formatLoose(observation.cold)}`);
-        if (Number.isFinite(observation.counter)) parts.push(`Counter ${formatLoose(observation.counter)}`);
-      }
-    } else if (place.layer === 'vending') {
-      if (observation) {
-        const working = workingWord(observation.working);
-        if (working) parts.push(working);
-      }
-    } else if (place.layer === 'microwave') {
-      if (observation) {
-        const working = workingWord(observation.working);
-        if (working) parts.push(working);
-        if (Number.isFinite(observation.units)) parts.push(`${formatLoose(observation.units)} units`);
-        if (Number.isFinite(observation.units_working)) {
-          parts.push(`${formatLoose(observation.units_working)} working`);
-        }
-        if (Number.isFinite(observation.clean)) parts.push(`Clean ${formatLoose(observation.clean)}`);
-        if (Number.isFinite(observation.waiting)) parts.push(`${formatLoose(observation.waiting)} waiting`);
-      }
-    } else if (place.layer === 'printer') {
-      parts.push('Printer location');
+    });
+    applyVisibility();
+  }
+
+  function applyVisibility() {
+    S.markers.forEach((m) => m.g.classList.toggle('is-hidden', !S.visible.has(m.place.layer)));
+  }
+
+  function describe(p) {
+    if (p.layer === 'study') {
+      const n = noiseFor(p.place_id);
+      const o = obsFor(p.place_id);
+      if (!n) return 'Not measured yet';
+      const b = band(n.laeq);
+      return `${n.laeq.toFixed(1)} dBA · ${b.label}${o && o.people ? ' · ' + o.people + ' people' : ''}`;
     }
-
-    return parts.length ? parts.join(' · ') : 'Not measured';
+    const st = stateFor(p.place_id);
+    if (p.layer === 'vending') { const it = itemsFor(p.place_id); return it.length ? `${it.length} products logged` : 'Products not logged yet'; }
+    if (p.layer === 'water') return st.counter ? `Counter ${Number(st.counter).toLocaleString('en-US')}` : 'Not measured yet';
+    if (st.units) return `${st.units_working || '?'} of ${st.units} working`;
+    return 'Not measured yet';
   }
 
-  function workingWord(value) {
-    const working = trim(value).toLowerCase();
-    if (working === 'y' || working === 'yes') return 'Working';
-    if (working === 'n' || working === 'no') return 'Not working';
-    return working ? trim(value) : '';
+  function showTip(m) {
+    const tip = $('tooltip');
+    const card = tip.parentElement.getBoundingClientRect();
+    const r = m.parts.head.getBoundingClientRect();
+    tip.replaceChildren(h('b', {}, m.place.name), describe(m.place));
+    tip.style.left = (r.left + r.width / 2 - card.left) + 'px';
+    tip.style.top = (r.top - card.top) + 'px';
+    tip.hidden = false;
   }
+  function hideTip() { $('tooltip').hidden = true; }
 
-  function isNotWorking(observation) {
-    const working = trim(observation.working).toLowerCase();
-    return working === 'n' || working === 'no';
-  }
-
-  function personText(count) {
-    return count === 1 ? '1 person' : `${formatLoose(count)} people`;
-  }
-
-  function renderQuietList() {
-    const list = dom.quietList;
-    list.replaceChildren();
-
-    if (!state.visibleLayers.has('study')) {
-      list.append(emptyListItem('Study places are hidden. Turn the Study places layer back on to see the ranking.'));
-      return;
-    }
-
-    const rows = state.places
-      .filter((place) => place.layer === 'study')
-      .map((place) => {
-        const noise = currentNoiseFor(place.place_id);
-        const observation = currentObservationFor(place.place_id);
-        return {
-          place,
-          laeq: noise && Number.isFinite(noise.laeq_db) ? noise.laeq_db : null,
-          people: observation && Number.isFinite(observation.people) ? observation.people : null
-        };
-      })
-      .sort((a, b) => {
-        if (a.laeq === null && b.laeq === null) {
-          return a.place.name.localeCompare(b.place.name);
-        }
-        if (a.laeq === null) return 1;
-        if (b.laeq === null) return -1;
-        if (a.laeq !== b.laeq) return a.laeq - b.laeq;
-        return a.place.name.localeCompare(b.place.name);
-      });
-
-    if (!rows.length) {
-      list.append(emptyListItem('No study places are in this dataset.'));
-      return;
-    }
-
-    rows.forEach((row) => {
-      const selected = state.selectedPlaceId === row.place.place_id;
-      const band = bandFor(row.laeq);
-      const button = el('button', {
-        className: `quiet-row${selected ? ' is-selected' : ''}`,
-        attrs: { type: 'button' }
-      });
-
-      const value = el('span', {
-        className: `quiet-value${row.laeq === null ? ' is-empty' : ''}`,
-        text: row.laeq === null ? 'not measured' : formatDb(row.laeq)
-      });
-      const name = el('span', { className: 'quiet-name', text: row.place.name });
-      button.append(name, value);
-
-      const bottom = el('span', { className: 'quiet-row-bottom' });
-      const chip = el('span', {
-        className: `band-chip ${band ? `band-${band.key}` : 'band-unmeasured'}`,
-        text: band ? band.label : 'Not measured'
-      });
-      bottom.append(chip);
-      if (row.people !== null) {
-        bottom.append(el('span', { className: 'quiet-people', text: personText(row.people) }));
+  function select(id, fromMap = false) {
+    S.selected = id;
+    S.markers.forEach((m, mid) => {
+      m.g.classList.toggle('is-selected', mid === id);
+      if (mid === id) {
+        m.parts.pulse.classList.remove('ring-pulse'); void m.parts.pulse.getBBox(); m.parts.pulse.classList.add('ring-pulse');
+        m.parts.pulse.style.animation = 'none'; void m.parts.pulse.getBBox(); m.parts.pulse.style.animation = '';
       }
-      button.append(bottom);
+    });
+    document.querySelectorAll('.rank').forEach((b) => b.classList.toggle('is-selected', b.dataset.id === id));
+    setTab('details');
+    renderDetails();
+    if (!fromMap && window.innerWidth < 960) $('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' });
+  }
 
-      button.addEventListener('click', () => selectPlace(row.place.place_id));
-      list.append(el('li', {}, button));
+  /* ---------------- panel ---------------- */
+  function setTab(name) {
+    if (S.tab === name && !S.firstPaint) return;
+    S.tab = name;
+    ['quiet', 'vending', 'details'].forEach((t) => {
+      const on = t === name;
+      $('tab-' + t).setAttribute('aria-selected', String(on));
+      $('tab-' + t).tabIndex = on ? 0 : -1;
+      const panel = $('panel-' + t);
+      panel.hidden = !on;
+      if (on) { panel.classList.remove('swap'); void panel.offsetWidth; panel.classList.add('swap'); }
     });
   }
+  function bindTabs() {
+    const tabs = ['quiet', 'vending', 'details'];
+    tabs.forEach((t, i) => {
+      $('tab-' + t).addEventListener('click', () => setTab(t));
+      $('tab-' + t).addEventListener('keydown', (e) => {
+        const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!d) return;
+        const next = tabs[(i + d + tabs.length) % tabs.length];
+        setTab(next); $('tab-' + next).focus();
+      });
+    });
+    $('vending-search').addEventListener('input', (e) => { S.vendingQuery = e.target.value.trim().toLowerCase(); renderVending(); });
+  }
 
-  function emptyListItem(message) {
-    return el('li', { className: 'empty-item' }, el('p', {
-      className: 'empty-state',
-      text: message
+  function renderQuiet(animate = false) {
+    const list = $('quiet-list');
+    const before = new Map([...list.children].map((li) => [li.dataset.id, li.getBoundingClientRect().top]));
+    const rows = S.places.filter((p) => p.layer === 'study').map((p) => ({ p, n: noiseFor(p.place_id), o: obsFor(p.place_id) }))
+      .sort((a, b) => (a.n ? a.n.laeq : Infinity) - (b.n ? b.n.laeq : Infinity) || a.p.name.localeCompare(b.p.name));
+    if (!S.visible.has('study')) { list.replaceChildren(h('li', {}, h('p', { class: 'empty' }, 'Study places are hidden. Turn the layer on to rank them.'))); return; }
+    let rank = 0;
+    list.replaceChildren(...rows.map(({ p, n, o }, i) => {
+      const b = band(n?.laeq);
+      if (n) rank += 1;
+      const li = h('li', { 'data-id': p.place_id, style: animate ? '' : `--delay:${700 + i * 45}ms` },
+        h('button', { type: 'button', class: 'rank' + (S.selected === p.place_id ? ' is-selected' : ''), 'data-id': p.place_id, onclick: () => select(p.place_id) },
+          h('span', { class: 'rank-no' }, n ? rank : '–'),
+          h('span', {}, h('span', { class: 'rank-name' }, p.name),
+            h('span', { class: 'rank-meta' }, [areaName(p), o && o.people ? `${o.people} ${o.people === '1' ? 'person' : 'people'}` : ''].filter(Boolean).join(' · '))),
+          h('span', { class: 'rank-value' }, h('span', { class: 'rank-db' }, n ? n.laeq.toFixed(1) : '—', n ? h('small', {}, ' dBA') : ''),
+            h('span', { class: 'band ' + (b ? b.key : '') }, b ? b.label : 'not measured'))));
+      if (animate) li.style.animation = 'none';
+      return li;
     }));
+    if (animate && !reduced()) {
+      [...list.children].forEach((li) => {
+        const old = before.get(li.dataset.id);
+        if (old == null) return;
+        const dy = old - li.getBoundingClientRect().top;
+        if (!dy) return;
+        li.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }], { duration: 380, easing: 'cubic-bezier(.22,.8,.24,1)' });
+      });
+    }
+  }
+
+  function renderVending() {
+    const box = $('vending-list');
+    const all = S.places.filter((p) => p.layer === 'vending').flatMap((p) => itemsFor(p.place_id).map((it) => ({ it, p })));
+    if (!all.length) {
+      box.replaceChildren(h('p', { class: 'empty' }, 'Products not transcribed yet. We read them from our photos of each machine; they will appear here with prices and sold-out slots.'));
+      return;
+    }
+    const q = S.vendingQuery;
+    const rows = all.filter(({ it }) => !q || (it.product || '').toLowerCase().includes(q))
+      .sort((a, b) => (a.it.price ?? Infinity) - (b.it.price ?? Infinity));
+    const cheapest = rows.find((r) => r.it.sold_out !== 'y');
+    box.replaceChildren(
+      h('p', { class: 'panel-intro' }, `${rows.length} of ${all.length} products` + (cheapest ? ` · cheapest available: ${cheapest.it.product} (${money(cheapest.it.price)}) in ${cheapest.p.name}` : '')),
+      ...rows.map(({ it, p }) => h('button', { type: 'button', class: 'v-row', onclick: () => select(p.place_id) },
+        h('span', {}, h('span', { class: 'v-name' }, it.product || 'Unknown product'),
+          h('span', { class: 'v-meta' }, [p.name, it.slot && 'slot ' + it.slot, it.size].filter(Boolean).join(' · '))),
+        h('span', { class: 'v-price' }, it.sold_out === 'y' ? h('span', { class: 'soldout' }, 'SOLD OUT') : money(it.price)))));
+  }
+
+  function stat(label, value, unit, hint) {
+    return h('div', { class: 'stat' }, h('span', { class: 'stat-label' }, label),
+      h('span', { class: 'stat-value' }, value, unit ? h('small', {}, unit) : ''), hint ? h('span', { class: 'stat-hint' }, hint) : '');
   }
 
   function renderDetails() {
-    const container = dom.detailsContent;
-    container.replaceChildren();
+    const box = $('details');
+    const p = S.byId.get(S.selected);
+    if (!p) { box.replaceChildren(h('p', { class: 'empty' }, 'Pick a place on the map or in a list to see everything we measured there.')); return; }
+    const L = LAYER[p.layer];
+    const kids = [h('div', { class: 'd-head' },
+      h('span', { class: 'd-layer', style: `--chip-color:${L.color}` }, h('i', {}), L.one),
+      h('h2', { class: 'd-title' }, p.name),
+      h('p', { class: 'd-sub' }, [areaName(p), p.location_note].filter(Boolean).join(' · ')))];
+    if (p.note) kids.push(h('p', { class: 'note-box' }, p.note));
 
-    const place = state.places.find((item) => item.place_id === state.selectedPlaceId);
-    if (!place) {
-      container.append(el('p', {
-        className: 'empty-state',
-        text: 'Select a place on the map or in Quiet spots.'
-      }));
+    const st = stateFor(p.place_id);
+    if (p.layer === 'study') {
+      const n = noiseFor(p.place_id), o = obsFor(p.place_id), b = band(n?.laeq);
+      kids.push(h('div', { class: 'stats' },
+        stat('Noise LAeq', n ? n.laeq.toFixed(1) : '—', n ? 'dBA' : '', b ? b.label : 'not measured'),
+        stat('Peak (max)', n && n.lmax != null ? n.lmax.toFixed(1) : '—', n ? 'dB' : ''),
+        stat('People', o && o.people ? o.people : '—', '', o && /area/i.test(o.note || '') ? 'whole area' : ''),
+        p.seats_total ? stat('Seats', p.seats_total, '', p.outlets ? p.outlets + ' outlets' : '') : null));
+    } else if (p.layer === 'water') {
+      kids.push(h('div', { class: 'stats' },
+        stat('Counter', st.counter ? Number(st.counter).toLocaleString('en-US') : '—', '', 'bottles saved'),
+        stat('Working', st.working ? (st.working === 'y' ? 'Yes' : 'No') : '—'),
+        stat('Cold', st.cold ? `${st.cold}/3` : '—')));
+      const usage = counterUsage(p.place_id);
+      if (usage) kids.push(h('p', { class: 'note-box' }, usage));
+    } else if (p.layer === 'vending') {
+      const it = itemsFor(p.place_id);
+      const avail = it.filter((i) => i.sold_out !== 'y' && i.price != null).sort((a, b) => a.price - b.price);
+      kids.push(h('div', { class: 'stats' },
+        stat('Products', it.length || '—'), stat('Sold out', it.length ? it.filter((i) => i.sold_out === 'y').length : '—'),
+        stat('Cheapest', avail[0] ? money(avail[0].price) : '—', '', avail[0] ? avail[0].product : '')));
+    } else {
+      kids.push(h('div', { class: 'stats' },
+        stat('Units', st.units || '—'), stat('Working', st.units_working || '—', st.units ? `/ ${st.units}` : ''),
+        p.layer === 'microwave' ? stat('Clean', st.clean ? `${st.clean}/5` : '—') : null,
+        p.layer === 'microwave' ? stat('Waiting', st.waiting || '—') : null));
+    }
+
+    if (p.layer !== 'study') {
+      kids.push(h('button', { type: 'button', class: 'btn', onclick: () => open3d(p) },
+        cubeIcon(), 'View in 3D'));
+    }
+
+    const photos = photosFor(p.place_id);
+    kids.push(h('h3', { class: 'section-title' }, `Photos (${photos.length})`));
+    kids.push(photos.length ? h('div', { class: 'thumbs' }, photos.map((ph, i) => h('button', {
+      type: 'button', class: 'thumb', 'aria-label': `Open photo ${i + 1}: ${ph.caption || p.name}`, onclick: (e) => openLightbox(photos, i, e.currentTarget)
+    }, h('img', { src: ph.file, alt: ph.caption || p.name, loading: 'lazy' }), h('span', {}, ph.round))))
+      : h('p', { class: 'empty' }, 'No photos yet.'));
+
+    if (p.layer === 'vending') {
+      const it = itemsFor(p.place_id);
+      kids.push(h('h3', { class: 'section-title' }, 'Products'));
+      kids.push(it.length ? productTable(it) : h('p', { class: 'empty' }, 'Products not transcribed yet. They are read from our photos of the machine.'));
+    }
+
+    kids.push(h('h3', { class: 'section-title' }, 'Every measurement'));
+    kids.push(historyTable(p));
+    box.replaceChildren(...kids);
+    const panel = $('panel-details');
+    panel.classList.remove('swap'); void panel.offsetWidth; panel.classList.add('swap');
+  }
+
+  function counterUsage(id) {
+    const rows = S.obs.filter((o) => o.place_id === id && num(o.counter) != null && o.t).sort((a, b) => a.t - b.t);
+    if (rows.length < 2) return rows.length === 1 ? 'One counter reading so far. A second reading in a later round gives bottles filled per hour.' : '';
+    const a = rows[0], b = rows[rows.length - 1];
+    const diff = num(b.counter) - num(a.counter);
+    const hours = (b.t - a.t) / 3.6e6;
+    return `${diff.toLocaleString('en-US')} bottles filled between ${fmtTime(a.t)} and ${fmtTime(b.t)} (≈ ${(diff / hours).toFixed(1)} per hour).`;
+  }
+
+  function productTable(items) {
+    let sortKey = 'price';
+    const wrap = h('div', { class: 'table-wrap' });
+    const draw = () => {
+      const sorted = [...items].sort((a, b) => sortKey === 'price' ? (a.price ?? Infinity) - (b.price ?? Infinity) : String(a.slot).localeCompare(String(b.slot), 'en', { numeric: true }));
+      wrap.replaceChildren(h('table', {},
+        h('thead', {}, h('tr', {},
+          h('th', {}, h('button', { type: 'button', onclick: () => { sortKey = 'slot'; draw(); } }, 'Slot')),
+          h('th', {}, 'Product'), h('th', {}, 'Size'),
+          h('th', {}, h('button', { type: 'button', onclick: () => { sortKey = 'price'; draw(); } }, 'Price')))),
+        h('tbody', {}, sorted.map((i) => h('tr', {}, h('td', { class: 'n' }, i.slot || '—'), h('td', {}, i.product || '—'),
+          h('td', {}, i.size || '—'), h('td', { class: 'n' }, i.sold_out === 'y' ? h('span', { class: 'soldout' }, 'SOLD OUT') : money(i.price)))))));
+    };
+    draw();
+    return wrap;
+  }
+
+  function historyTable(p) {
+    const rows = [];
+    S.noise.filter((n) => n.place_id === p.place_id).forEach((n) => rows.push({ t: n.t, round: n.round, what: 'Noise',
+      value: `${n.laeq?.toFixed(1)} dBA (max ${n.lmax?.toFixed(1)}, peak ${n.lcpeak?.toFixed(1)}, ${n.dur} s)`, src: n.source_file, note: n.note }));
+    S.obs.filter((o) => o.place_id === p.place_id).forEach((o) => {
+      const parts = [];
+      if (o.people) parts.push(`${o.people} people`);
+      if (o.seats_taken) parts.push(`${o.seats_taken} seats taken`);
+      if (o.working) parts.push(o.working === 'y' ? 'working' : 'not working');
+      if (o.cold) parts.push(`cold ${o.cold}/3`);
+      if (o.counter) parts.push(`counter ${Number(o.counter).toLocaleString('en-US')}`);
+      if (o.units) parts.push(`${o.units_working || '?'} of ${o.units} working`);
+      if (o.clean) parts.push(`clean ${o.clean}/5`);
+      if (o.waiting) parts.push(`${o.waiting} waiting`);
+      rows.push({ t: o.t, round: o.round, what: 'Check', value: parts.join(', ') || '—', note: o.note });
+    });
+    if (!rows.length) return h('p', { class: 'empty' }, 'Not measured yet. This place is on our collection route.');
+    rows.sort((a, b) => (a.t?.getTime() || 0) - (b.t?.getTime() || 0));
+    return h('div', { class: 'table-wrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, 'Round'), h('th', {}, 'Time'), h('th', {}, 'Measured'), h('th', {}, 'Source'), h('th', {}, 'Note'))),
+      h('tbody', {}, rows.map((r) => h('tr', {}, h('td', { class: 'n' }, r.round), h('td', {}, fmtTime(r.t)), h('td', {}, r.value),
+        h('td', {}, r.src ? h('a', { href: r.src, target: '_blank', rel: 'noopener' }, 'PDF report') : 'field log'), h('td', {}, r.note || '—'))))));
+  }
+
+  function cubeIcon() {
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = '<path d="M12 2 21 7v10l-9 5-9-5V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="currentColor" stroke-width="1.8"/>';
+    return svg;
+  }
+
+  /* ---------------- facts ---------------- */
+  function renderFacts() {
+    const measured = S.noise.filter((n) => n.laeq != null);
+    const times = [...S.noise, ...S.obs].map((r) => r.t).filter(Boolean).sort((a, b) => a - b);
+    const quiet = [...measured].sort((a, b) => a.laeq - b.laeq)[0];
+    const loud = [...measured].sort((a, b) => b.laeq - a.laeq)[0];
+    const facts = [
+      [S.places.length, 'places logged on the 1st floor'],
+      [measured.length, 'noise measurements (NIOSH SLM reports)'],
+      [S.rounds.length, `collection round${S.rounds.length === 1 ? '' : 's'}` + (times.length ? `, ${fmtTime(times[0])} – ${fmtTime(times[times.length - 1])}` : '')],
+      quiet && loud ? [`${(loud.laeq - quiet.laeq).toFixed(1)} dB`, `between the quietest (${S.byId.get(quiet.place_id).name}) and loudest (${S.byId.get(loud.place_id).name}) spot`] : null
+    ].filter(Boolean);
+    $('facts').replaceChildren(...facts.map(([v, l]) => h('div', { class: 'fact' }, h('span', { class: 'fact-value' }, v), h('span', { class: 'fact-label' }, l))));
+  }
+
+  /* ---------------- lightbox ---------------- */
+  const LB = { list: [], i: 0, opener: null };
+  function openLightbox(list, i, opener) {
+    LB.list = list; LB.i = i; LB.opener = opener;
+    showPhoto();
+    $('lightbox').showModal();
+  }
+  function showPhoto() {
+    const ph = LB.list[LB.i];
+    const img = $('lightbox-img');
+    img.src = ph.file;
+    img.alt = ph.caption || S.byId.get(ph.place_id)?.name || 'Field photo';
+    $('lightbox-caption').textContent = [S.byId.get(ph.place_id)?.name, ph.caption, ph.round, fmtTime(ph.t), `${LB.i + 1} / ${LB.list.length}`].filter((x) => x && x !== '—').join(' · ');
+    $('lightbox-prev').hidden = LB.list.length < 2;
+    $('lightbox-next').hidden = LB.list.length < 2;
+  }
+  function stepPhoto(d) { if (LB.list.length < 2) return; LB.i = (LB.i + d + LB.list.length) % LB.list.length; showPhoto(); }
+  function bindModals() {
+    const lb = $('lightbox');
+    $('lightbox-prev').addEventListener('click', () => stepPhoto(-1));
+    $('lightbox-next').addEventListener('click', () => stepPhoto(1));
+    lb.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') stepPhoto(-1); if (e.key === 'ArrowRight') stepPhoto(1); });
+    let x0 = null;
+    lb.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+    lb.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) stepPhoto(dx < 0 ? 1 : -1); x0 = null; });
+    lb.addEventListener('close', () => { if (LB.opener) LB.opener.focus(); });
+    [lb, $('viewer3d')].forEach((d) => {
+      d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) d.close(); });
+    });
+    $('viewer3d').addEventListener('close', () => { if (V.handle) { V.handle.dispose(); V.handle = null; } if (V.opener) V.opener.focus(); });
+  }
+
+  /* ---------------- 3D viewer ---------------- */
+  const V = { mod: null, handle: null, opener: null };
+  async function open3d(p) {
+    V.opener = document.activeElement;
+    const dlg = $('viewer3d');
+    $('viewer3d-kind').textContent = LAYER[p.layer].one + (S.round === LATEST ? ' · latest data' : ' · round ' + S.round);
+    $('viewer3d-title').textContent = p.name;
+    $('viewer3d-pick').textContent = p.layer === 'vending' ? (itemsFor(p.place_id).length ? 'Point at a product to see its name and price.' : '') : '';
+    const stage = $('viewer3d-stage');
+    stage.replaceChildren(h('span', {}, 'Loading 3D view…'));
+    dlg.showModal();
+    try {
+      V.mod = V.mod || await import('./model3d.js');
+    } catch (e) {
+      console.error(e);
+      stage.replaceChildren(h('span', {}, '3D view could not load (it needs internet for Three.js).'));
       return;
     }
-
-    const meta = LAYER_META[place.layer];
-    const noises = state.noise.filter((row) => row.place_id === place.place_id);
-    const observations = state.observations.filter((row) => row.place_id === place.place_id);
-
-    const head = el('div', { className: 'details-head' });
-    head.append(
-      el('span', {
-        className: `layer-tag layer-${place.layer}`,
-        text: meta.singular
-      }),
-      el('h2', { text: place.name }),
-      el('p', {
-        className: 'details-sub',
-        text: place.area ? `Area ${place.area}` : 'Area not recorded'
-      })
-    );
-    container.append(head);
-
-    const facts = el('dl', { className: 'fact-grid' });
-    appendFact(facts, 'Layer', meta.label);
-    appendFact(facts, 'Area', place.area ? `Area ${place.area}` : '—');
-    if (place.seats_total !== null) {
-      appendFact(facts, 'Seats', formatLoose(place.seats_total));
-    }
-    if (place.outlets !== null) {
-      appendFact(facts, 'Outlets', formatLoose(place.outlets));
-    }
-    container.append(facts);
-
-    const location = el('div', { className: 'detail-note' });
-    location.append(
-      el('span', { className: 'detail-label', text: 'Location' }),
-      el('p', { text: place.location_note || '—' })
-    );
-    container.append(location);
-
-    const note = el('div', { className: 'detail-note' });
-    note.append(
-      el('span', { className: 'detail-label', text: 'Note' }),
-      el('p', { text: place.note || '—' })
-    );
-    container.append(note);
-
-    if (place.layer === 'water') {
-      const summary = buildCounterSummary(observations);
-      if (summary) container.append(summary);
-    }
-
-    const measurements = el('section', { className: 'measurements' });
-    measurements.append(el('h3', { text: 'Measurements' }));
-    const rows = buildMeasurementRows(place, noises, observations);
-    if (!rows.length) {
-      measurements.append(el('p', {
-        className: 'table-empty',
-        text: 'Not measured yet. This place is on our collection route.'
-      }));
-    } else {
-      measurements.append(buildMeasurementTable(place, rows));
-    }
-    container.append(measurements);
-  }
-
-  function appendFact(container, label, value) {
-    const fact = el('div', { className: 'fact' });
-    fact.append(
-      el('dt', { text: label }),
-      el('dd', { text: value })
-    );
-    container.append(fact);
-  }
-
-  function buildCounterSummary(observations) {
-    const readings = observations
-      .filter((row) => Number.isFinite(row.counter))
-      .slice()
-      .sort((a, b) => {
-        const aTime = Number.isFinite(a.tsMs) ? a.tsMs : 0;
-        const bTime = Number.isFinite(b.tsMs) ? b.tsMs : 0;
-        return aTime - bTime || a.rowIndex - b.rowIndex;
-      });
-
-    if (readings.length < 2) return null;
-
-    let filled = 0;
-    for (let index = 1; index < readings.length; index += 1) {
-      const difference = readings[index].counter - readings[index - 1].counter;
-      if (difference > 0) filled += difference;
-    }
-
-    const first = readings[0];
-    const last = readings[readings.length - 1];
-    const hours = (last.tsMs - first.tsMs) / 3600000;
-    const perHour = Number.isFinite(hours) && hours > 0 ? filled / hours : null;
-
-    const summary = el('p', { className: 'counter-summary' });
-    summary.append(
-      el('strong', { text: 'Bottles filled between readings: ' }),
-      document.createTextNode(
-        `${formatLoose(filled)} (≈ ${perHour === null ? '—' : perHour.toFixed(1)} per hour)`
-      )
-    );
-    return summary;
-  }
-
-  function buildMeasurementRows(place, noises, observations) {
-    const rounds = new Set();
-    noises.forEach((row) => {
-      if (row.round) rounds.add(row.round);
+    if (!dlg.open) return;
+    stage.replaceChildren();
+    const st = stateFor(p.place_id);
+    let data;
+    if (p.layer === 'vending') data = { working: st.working || '', items: itemsFor(p.place_id).map((i) => ({ ...i, price_usd: i.price })) };
+    else if (p.layer === 'water') data = { working: st.working || '', cold: num(st.cold), counter: num(st.counter), filter_light: st.filter_light || '' };
+    else if (p.layer === 'microwave') data = { units: num(st.units), units_working: num(st.units_working), extras: /utensil|napkin/i.test((p.note || '') + ' ' + (st.note || '')) ? ['utensils', 'napkins'] : [] };
+    else data = { units: num(st.units), units_working: num(st.units_working), broken_note: st.note || '' };
+    V.handle = V.mod.open(stage, {
+      kind: p.layer, title: p.name, data,
+      onPick: (item) => { $('viewer3d-pick').textContent = item ? `${item.slot ? item.slot + ' · ' : ''}${item.product} · ${item.sold_out === 'y' ? 'sold out' : money(num(item.price_usd))}` : ''; }
     });
-    observations.forEach((row) => {
-      if (row.round) rounds.add(row.round);
-    });
-
-    return Array.from(rounds)
-      .sort(compareRounds)
-      .map((round) => {
-        const noise = latestByTimestamp(noises.filter((row) => row.round === round));
-        const observation = latestByTimestamp(observations.filter((row) => row.round === round));
-        if (!noise && !observation) return null;
-        return { round, noise, observation };
-      })
-      .filter(Boolean);
   }
 
-  function measurementColumns(layer) {
-    if (layer === 'study') {
-      return [
-        ['round', 'Round'],
-        ['time', 'Time'],
-        ['laeq', 'LAeq'],
-        ['lmax', 'Lmax'],
-        ['lcpeak', 'LCpeak'],
-        ['duration', 'Duration'],
-        ['people', 'People'],
-        ['seats', 'Seats taken'],
-        ['report', 'Report'],
-        ['notes', 'Notes']
-      ];
-    }
-    if (layer === 'water') {
-      return [
-        ['round', 'Round'],
-        ['time', 'Time'],
-        ['working', 'Working'],
-        ['cold', 'Cold'],
-        ['counter', 'Counter'],
-        ['photo', 'Photo'],
-        ['notes', 'Notes']
-      ];
-    }
-    if (layer === 'vending') {
-      return [
-        ['round', 'Round'],
-        ['time', 'Time'],
-        ['working', 'Working'],
-        ['photo', 'Photo'],
-        ['notes', 'Notes']
-      ];
-    }
-    if (layer === 'microwave') {
-      return [
-        ['round', 'Round'],
-        ['time', 'Time'],
-        ['units', 'Units'],
-        ['unitsWorking', 'Units working'],
-        ['clean', 'Clean'],
-        ['waiting', 'Waiting'],
-        ['photo', 'Photo'],
-        ['notes', 'Notes']
-      ];
-    }
-    return [
-      ['round', 'Round'],
-      ['time', 'Time'],
-      ['photo', 'Photo'],
-      ['notes', 'Notes']
-    ];
+  /* ---------------- boot ---------------- */
+  function refreshAll(animate) {
+    updateMarkers(animate);
+    renderQuiet(animate);
+    renderVending();
+    renderDetails();
   }
 
-  function buildMeasurementTable(place, rows) {
-    const columns = measurementColumns(place.layer);
-    const table = el('table', { className: 'measure-table' });
-    table.append(el('caption', { text: `Measurements for ${place.name} across rounds` }));
-
-    const headRow = el('tr');
-    columns.forEach(([, label]) => headRow.append(el('th', { attrs: { scope: 'col' }, text: label })));
-    const thead = el('thead');
-    thead.append(headRow);
-    table.append(thead);
-
-    const tbody = el('tbody');
-    rows.forEach((row) => {
-      const tr = el('tr');
-      columns.forEach(([key]) => {
-        tr.append(buildMeasurementCell(key, row, place));
-      });
-      tbody.append(tr);
-    });
-    table.append(tbody);
-
-    const scroll = el('div', { className: 'table-scroll' });
-    scroll.append(table);
-    return scroll;
+  function fail(err) {
+    console.error(err);
+    const msg = location.protocol === 'file:'
+      ? 'Open this app through a web server: run "python -m http.server" in the repo folder and visit http://localhost:8000.'
+      : 'Could not load the data: ' + err.message;
+    $('map').replaceChildren(h('p', { class: 'map-error' }, msg));
   }
 
-  function buildMeasurementCell(key, row, place) {
-    const noise = row.noise;
-    const observation = row.observation;
-    const timeSource = latestTimestampRecord(noise, observation);
-
-    if (key === 'round') {
-      return el('td', { className: 'round-cell', text: row.round || '—' });
-    }
-    if (key === 'time') {
-      return el('td', {
-        className: 'time-cell',
-        text: timeSource ? formatTime(timeSource.ts) : '—'
-      });
-    }
-    if (key === 'laeq') return valueCell(noise && formatDb(noise.laeq_db));
-    if (key === 'lmax') return valueCell(noise && formatDb(noise.lmax_db));
-    if (key === 'lcpeak') {
-      return valueCell(noise && Number.isFinite(noise.lcpeak_db)
-        ? `${formatDecimal(noise.lcpeak_db)} dB(C)`
-        : null);
-    }
-    if (key === 'duration') {
-      return valueCell(noise && Number.isFinite(noise.duration_s)
-        ? `${formatLoose(noise.duration_s)} s`
-        : null);
-    }
-    if (key === 'people') return valueCell(observation && formatCount(observation.people));
-    if (key === 'seats') return valueCell(observation && formatCount(observation.seats_taken));
-    if (key === 'working') return valueCell(observation && yesNo(observation.working));
-    if (key === 'cold') return valueCell(observation && formatCount(observation.cold));
-    if (key === 'counter') return valueCell(observation && formatLoose(observation.counter));
-    if (key === 'units') return valueCell(observation && formatCount(observation.units));
-    if (key === 'unitsWorking') return valueCell(observation && formatCount(observation.units_working));
-    if (key === 'clean') return valueCell(observation && formatCount(observation.clean));
-    if (key === 'waiting') return valueCell(observation && formatCount(observation.waiting));
-    if (key === 'report') return reportCell(noise);
-    if (key === 'photo') return photoCell(observation, place, row.round);
-    if (key === 'notes') {
-      const notes = [noise && noise.note, observation && observation.note].filter(Boolean);
-      return el('td', {
-        className: notes.length ? 'notes-cell' : 'notes-cell missing',
-        text: notes.length ? notes.join('; ') : '—'
-      });
-    }
-    return valueCell(null);
+  async function boot() {
+    bindTabs();
+    bindModals();
+    try {
+      if (!window.Papa) throw new Error('PapaParse did not load (needs internet).');
+      const svgText = await load();
+      renderChips();
+      renderRounds();
+      installMap(svgText);
+      bindView();
+      renderFacts();
+      setTab('quiet');
+      S.firstPaint = false;
+      refreshAll(false);
+    } catch (e) { fail(e); }
   }
-
-  function latestTimestampRecord(noise, observation) {
-    if (noise && observation) {
-      const noiseTime = Number.isFinite(noise.tsMs) ? noise.tsMs : -Infinity;
-      const observationTime = Number.isFinite(observation.tsMs) ? observation.tsMs : -Infinity;
-      return observationTime > noiseTime ? observation : noise;
-    }
-    return noise || observation;
-  }
-
-  function valueCell(value) {
-    if (value === null || value === undefined || value === '' || value === '—') {
-      return el('td', { className: 'missing', text: '—' });
-    }
-    return el('td', { text: value });
-  }
-
-  function reportCell(noise) {
-    const href = noise ? safeResourcePath(noise.source_file) : null;
-    if (!href) return el('td', { className: 'missing', text: '—' });
-    const link = el('a', {
-      attrs: {
-        href,
-        target: '_blank',
-        rel: 'noopener noreferrer'
-      },
-      text: 'Original report (PDF)'
-    });
-    const cell = el('td');
-    cell.append(link);
-    return cell;
-  }
-
-  function photoCell(observation, place, round) {
-    const href = observation ? safeResourcePath(observation.photo) : null;
-    if (!href) return el('td', { className: 'missing', text: '—' });
-    const image = el('img', {
-      className: 'photo-thumb',
-      attrs: {
-        src: href,
-        alt: `Photo for ${place.name}${round ? `, ${round}` : ''}`,
-        loading: 'lazy',
-        decoding: 'async'
-      }
-    });
-    const link = el('a', {
-      className: 'photo-link',
-      attrs: {
-        href,
-        target: '_blank',
-        rel: 'noopener noreferrer',
-        'aria-label': `Open full-size photo for ${place.name}${round ? `, ${round}` : ''}`
-      }
-    }, image);
-    const cell = el('td');
-    cell.append(link);
-    return cell;
-  }
-
-  function safeResourcePath(value) {
-    const path = trim(value);
-    if (!path) return null;
-    if (/^(?:javascript|data|vbscript):/i.test(path)) return null;
-    if (/^\/\//.test(path)) return null;
-    return path;
-  }
-
-  function yesNo(value) {
-    const text = trim(value).toLowerCase();
-    if (text === 'y' || text === 'yes') return 'Yes';
-    if (text === 'n' || text === 'no') return 'No';
-    return trim(value) || null;
-  }
-
-  function formatCount(value) {
-    if (!Number.isFinite(value)) return null;
-    return formatLoose(value);
-  }
-
-  function formatLoose(value) {
-    if (!Number.isFinite(value)) return null;
-    if (Number.isInteger(value)) return String(value);
-    return String(Number(value.toFixed(2)));
-  }
-
-  function formatDecimal(value) {
-    return Number.isFinite(value) ? value.toFixed(1) : '—';
-  }
-
-  function formatDb(value) {
-    return Number.isFinite(value) ? `${value.toFixed(1)} dBA` : '—';
-  }
-
-  function formatTime(value) {
-    const text = trim(value);
-    const timestamp = parseLocalTimestamp(text);
-    if (!Number.isFinite(timestamp)) return text || '—';
-    const date = new Date(timestamp);
-    const hours = date.getHours();
-    const hour12 = hours % 12 || 12;
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const suffix = hours >= 12 ? 'PM' : 'AM';
-    return `${WEEKDAYS[date.getDay()]} ${hour12}:${minutes} ${suffix}`;
-  }
-
-  function setTab(tabName) {
-    if (tabName !== 'quiet' && tabName !== 'details') return;
-    state.activeTab = tabName;
-    const quietSelected = tabName === 'quiet';
-
-    dom.tabQuiet.setAttribute('aria-selected', String(quietSelected));
-    dom.tabDetails.setAttribute('aria-selected', String(!quietSelected));
-    dom.tabQuiet.tabIndex = quietSelected ? 0 : -1;
-    dom.tabDetails.tabIndex = quietSelected ? -1 : 0;
-    dom.panelQuiet.hidden = !quietSelected;
-    dom.panelDetails.hidden = quietSelected;
-  }
-
-  function handleTabKeydown(event) {
-    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
-    if (!keys.includes(event.key)) return;
-    event.preventDefault();
-
-    let next;
-    if (event.key === 'Home') {
-      next = 'quiet';
-    } else if (event.key === 'End') {
-      next = 'details';
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      next = state.activeTab === 'quiet' ? 'details' : 'quiet';
-    }
-
-    if (!next) return;
-    setTab(next);
-    (next === 'quiet' ? dom.tabQuiet : dom.tabDetails).focus();
-  }
-
-  function showTooltip(marker, name, description) {
-    if (!dom.tooltip || !dom.mapFrame) return;
-    dom.tooltip.replaceChildren(
-      el('strong', { text: name }),
-      el('span', { text: description })
-    );
-    dom.tooltip.hidden = false;
-
-    const frameRect = dom.mapFrame.getBoundingClientRect();
-    const markerRect = marker.getBoundingClientRect();
-    let x = markerRect.left + markerRect.width / 2 - frameRect.left;
-    const y = markerRect.top - frameRect.top;
-
-    dom.tooltip.style.left = `${x}px`;
-    dom.tooltip.style.top = `${y}px`;
-
-    const tooltipWidth = dom.tooltip.offsetWidth;
-    const padding = 8;
-    if (frameRect.width > tooltipWidth + padding * 2) {
-      const min = tooltipWidth / 2 + padding;
-      const max = frameRect.width - tooltipWidth / 2 - padding;
-      x = Math.min(Math.max(x, min), max);
-      dom.tooltip.style.left = `${x}px`;
-    }
-  }
-
-  function hideTooltip() {
-    if (!dom.tooltip) return;
-    dom.tooltip.hidden = true;
-    dom.tooltip.replaceChildren();
-  }
-
-  function measureScale() {
-    if (!state.svg) return;
-    const rect = state.svg.getBoundingClientRect();
-    const viewBoxWidth = state.svg.viewBox.baseVal.width || 1;
-    const pxPerUnit = rect.width / viewBoxWidth;
-    state.pxPerUnit = Number.isFinite(pxPerUnit) && pxPerUnit > 0 ? pxPerUnit : 1;
-    state.scale = rect.width > 0 && rect.width < 700 ? 1.6 : 1;
-  }
-
-  function setupResizeObserver() {
-    if (!state.svg) return;
-    const recalculate = () => {
-      const previousScale = state.scale;
-      measureScale();
-      if (state.scale !== previousScale) {
-        renderMarkers();
-      }
-    };
-
-    if (typeof ResizeObserver === 'function') {
-      state.resizeObserver = new ResizeObserver(recalculate);
-      state.resizeObserver.observe(state.svg);
-    } else {
-      window.addEventListener('resize', recalculate, { passive: true });
-    }
-  }
-
-  init();
+  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
 })();
