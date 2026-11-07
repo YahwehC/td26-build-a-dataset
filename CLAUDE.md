@@ -24,6 +24,9 @@ User speaks Chinese → answer in Chinese; code, docs, specs in English. Delegat
 - Team has exactly one female member → she covers women's restrooms (R0 + R4 only) + smallest zone (West Wing). No photos in restrooms; enter only matching or all-gender/family restrooms.
 - Team brief: `team-brief.html`, published privately as https://claude.ai/artifact/Kw2KCkN15JHPp71Bik5b8q (user shares it with the team).
 - Still in planning: user said not to start building yet (2026-11-07 afternoon).
+- **Scope update (later 2026-11-07):** user dropped study spots as a core layer. Layers are now **water fillers, restrooms, microwaves, vending machines**. Re-measured over time: filler counters, vending sold-out slots / total and price of water + 20 oz soda, microwave working + queue at mealtimes, restroom supplies. Proposed rounds: R0 Sat afternoon (inventory), R1 Sat ~19:00 (dinner), R2 Sun ~09:00 (final). Undecided: "light" study spots (8–10 lounges, seats taken only, noise optional). Noise only matters if study spots come back (iPhone NIOSH SLM, LAeq over 10–30 s, same phone, side-by-side calibration). `team-brief.html` still shows the old study-spot plan and must be updated once the scope is confirmed.
+- Idea under discussion: Gaussian-splat 3D. Advised against a whole-MSC 3D site (capture scale, people in scans, file size, weak data link). Proposed instead: 3–5 small splats of key spots (Scaniverse on iPhone) shown as "3D preview" in a point's detail panel, viewer GaussianSplats3D or Spark (MIT).
+- Repo rule: everything in the repo is English (UI, docs, comments, commits); talk to the user in Chinese.
 
 ## Open questions for the user
 - Team size, phone types (iPhone/Android), and the noise app actually installed.

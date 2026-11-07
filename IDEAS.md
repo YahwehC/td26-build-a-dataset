@@ -1,63 +1,79 @@
-# Build-A-Dataset — 3 个方案（2026-11-07 11:45 起草）
+# Build-A-Dataset: ideas considered (drafted 2026-11-07 11:45)
 
-官方要点（见 `GUIDE.txt`）：
-- 主数据必须**本届活动期间自己采集**、来自真实世界；公开数据/API 只能做补充；**严禁伪造**，模拟/估计值必须标注。
-- 必须是**可交互的应用**（网页/地图/工具/游戏），数据要驱动核心功能。
-- 提交（Devpost）：GitHub 公开仓库（代码 + 数据集 CSV + README 运行说明 + 采集方法 + 数据字典 + 局限性）+ **约 2 分钟视频**（在哪/怎么采 → 数据内容 → 应用演示）。
-- 评分 5×20：采集质量与严谨性 / 应用功能与数据融合 / 创意 / 实用性与对局限性的处理 / 展示与文档。
-- 时间：现在周六中午 → 周日 12:00 截止。可采集窗口 ≈ 周六 14:00 – 周日 10:00。
+> **Current direction (latest, 2026-11-07 afternoon):** a multi-layer interactive MSC map with **water fillers, restrooms, microwaves and vending machines**. Each layer has something we re-measure over time: filler "bottles saved" counters, sold-out vending slots, microwave queues at mealtimes, restroom supplies.
+> **Light study spots** (8–10 big lounges, seats taken only, noise optional) are still undecided. Optional extra: a few small Gaussian-splat 3D previews of key spots (Scaniverse capture, in-browser viewer); the main app stays a 2D map.
+> The ideas below are the earlier options and research.
 
----
-
-## A. MSC Study-Spot Finder（推荐）
-**问题**：现在去 MSC 哪里学习最好——安静、有插座、有座位、适合几个人？
-
-**两张表**
-1. `zones.csv`（每个区域采一次，约 15–25 个公共座位区，MSC 内 + 可选 Evans/ZACH）
-   `zone_id, building, floor, name, seats_total, outlets_reachable, seat_type(table/soft/booth/counter), group_max, natural_light(y/n), food_ok(y/n), lat, lon, photo(无人物)`
-2. `observations.csv`（巡查，每轮把所有区域走一遍）
-   `obs_id, ts(自动), observer, device, zone_id, people_count, seats_occupied, noise_dba(10 s 平均), lux(可选), wifi_mbps(可选), notes`
-
-**采样计划**：固定路线，周六 14、17、20、23 点，周日 02(可选)、08、10 点 → 6–7 轮 × ~20 区 ≈ **120–140 条观测**；每轮 1 人约 20–25 分钟。
-
-**质量控制**：固定路线顺序；表单下拉选区域、自动时间戳、数值范围校验；噪声统一用同一台手机（或开始前两台手机同点对比得出偏移）；每轮随机抽 2 个区域由第二人独立复数 → 计算一致性；只记人数，不拍人、不记身份。
-
-**应用**：「现在/某时去哪学」推荐器——筛选（安静/插座/人数/时间）→ 区域排名 + 按小时的拥挤度/噪声曲线 + 平面图热力色块 + 区域详情页。局限性：周末 + 黑客松人群 ≠ 平日。
-
-**优点**：就在会场内采，不用跑远，最好落实；实用性强。**缺点**：官方示例里有"噪声/自习区"，原创性要靠「多维度 + 24 小时曲线 + 浏览器内测噪声」来拉开。
-
-## B. Refill Radar（饮水/灌水站地图）
-**问题**：最近的、能用的、出水快、滤芯没过期的灌水站在哪？谁用得最多？
-
-`stations.csv`：`station_id, building, floor, location_desc, type(bottle-filler/fountain/both), working(y/n), filter_led(green/yellow/red/none), bottle_counter, counter_ts, fill_500ml_s(两次取平均), cold_rating(1–3), ada_height(y/n), lat, lon, photo`
-- 周六下午全部走一遍，周日早上**再读一次计数器** → 每站每小时使用量（灌水机上的"已节省瓶数"计数器）。
-- 规模：MSC + 附近 4–6 栋楼 ≈ 30–50 站。
-
-**应用**：地图 + "最近的好灌水站"、出水速度排名、滤芯需更换清单（可报给校方）、使用量热力。
-**优点**：原创性最高，计数器差值是很巧的"免费传感器"。**缺点**：周末其他楼可能锁门，样本可能偏少；需要走动。
-
-## C. Accessible Aggieland（无障碍入口审计）
-**问题**：MSC 周边哪些入口真正无障碍？
-
-`entrances.csv`：`entrance_id, building, side, step_free(y/n), ramp_slope_deg(手机水平仪), ada_ok(坡度≤4.8°), auto_door_button(y/n/broken), open_delay_s, stay_open_s, door_width_in(卷尺/手机测距), surface(smooth/cracked), lat, lon, photo`
-- 规模：MSC + 周边 6–8 栋楼约 40 个入口，2 人一组 3–4 小时。
-
-**应用**：无障碍路线地图，按轮椅/推车/拐杖等需求筛选入口，标出"按钮坏了/坡太陡"。
-**优点**：社会影响力强、测量严谨（坡度对比 ADA 1:12 标准）。**缺点**：需要卷尺、走动多；周末门可能锁（按钮测不了）。
+Official key points (see `GUIDE.txt`):
+- The primary data must be **collected by the team during the event**, from the real world. Public data and APIs may only supplement it. **No fabrication**; simulated or estimated values must be labeled.
+- It must be an **interactive application** (web page, map, tool, game), and the data must drive its core feature.
+- Submission (Devpost): a public GitHub repo (code, dataset CSV, README with run steps, collection methodology, data dictionary, limitations) plus a **~2-minute video** (where and how we collected → what the data contains → app demo).
+- Judging, 5 × 20 points: collection quality and rigor / app functionality and data integration / creativity / usefulness and treatment of limitations / communication and documentation.
+- Timing: now is Saturday noon; the deadline is Sunday 12:00. Collection window ≈ Sat 14:00 to Sun 10:00.
 
 ---
 
-## 不用走动的方案（第二轮）
-- **D. Datathon 熬夜反应测试（Sleep Debt Meter）**：征得同意的参赛者在我们的手机/电脑上做 30 秒反应测试（5 次取中位数）+ 匿名填"已清醒几小时、今天喝了几杯咖啡/能量饮料、睡了几小时"。周六下午到周日早上在会场里分 3–4 次各问 15–20 人 → 60–100 人。应用：自己测一次，看你在同等清醒时长的人里排第几、全场反应时间随熬夜时长变慢的曲线、"该不该去睡一觉"。采集工具=应用本身。可选加手机陀螺仪"手稳不稳"测试。风险：评委可能觉得"数据是从屏幕上来的"，要在视频里展示线下逐桌邀请、统一流程。
-- **E. Datathon 排队预测**：在活动饭点（周六晚饭、夜宵、周日早饭）每 3–5 分钟记一次队伍人数，并抽样计时"从排队到拿到饭"几分钟 → "现在去拿饭要等多久"。只在会场里，靠活动的饭点时间。数据量小（每顿饭 10–20 条）。
-- **F. MSC 吃饭性价比**：拍下 MSC 各餐厅菜单牌/价格（只拍菜单不拍人），录入价格、份量、热量/蛋白质（有标注的话）→ "10 美元内最饱/蛋白质最多"推荐器。约 1 小时，只在 MSC 美食区。风险：周末部分店不开；数据偏"抄写"，测量含量少。
+## A. MSC Study-Spot Finder
+**Question:** where in the MSC is the best place to study right now: quiet, with outlets and free seats, fitting a group?
 
-## 网上类似项目调研（2026-11-07，DuckDuckGo）
-- **自习区/噪声类（A）——撞车很多**：Devpost "StudySpot"（噪声+拥挤彩色地图）、"Study Hall Checker"（VT 楼宇占用）、GitHub 多个 Campus-Study-Spot-Finder。TAMU 图书馆官方已有 "Explore" 自习区平面图 + "How busy are the libraries?"。→ A 原创性偏低，但 MSC 不在图书馆系统里。
-- **灌水站（B）**：Penn 官方灌水站地图、BU CS506 课程项目、Devpost 有个同名 "Refill Radar"（要改名）。TAMU 的灌水机确实带"Plastic Bottles Saved"计数器（Waymarking 记录了 Schuhmacher Hall 的一台），但**没找到 TAMU 官方灌水站地图**；用计数器两次读数算使用率的做法没见别人做过。
-- **无障碍（C）**：Devpost "Access Maps"（社区上报坡道/电梯问题）、GitHub Campus Accessibility Map；TAMU 办过 Diversity Accessibility Hackathon。用坡度实测对照 ADA 标准的较少见。
-- **得奖项目共同点**：亮点都在"采集方式本身有创意"——DataHacks 2026 冠军 BioByte（可穿戴设备测热指数，绘制校园热点）、Packed（ESP32 用 Wi-Fi 噪声估算食堂拥挤度）、TrippinTracker（队友绑传感器走路采 500+ 样本）。
+**Two tables**
+1. `zones.csv`, recorded once per area (about 15–25 public seating areas in the MSC, optionally Evans/ZACH):
+   `zone_id, building, floor, name, seats_total, outlets_reachable, seat_type(table/soft/booth/counter), group_max, natural_light(y/n), food_ok(y/n), lat, lon, photo(no people)`
+2. `observations.csv`, one patrol round covers every area:
+   `obs_id, ts(auto), observer, device, zone_id, people_count, seats_occupied, noise_dba(10 s average), lux(optional), wifi_mbps(optional), notes`
 
-## 采集工具（三个方案通用做法）
-单页手机网页（离线可用，数据存手机本地 → 一键导出/分享 CSV），自动时间戳、下拉选项、范围校验；方案 A 额外带"用麦克风测 10 秒噪声"按钮（未校准 dBFS，同一手机内可比，另填 SLM App 读数做主值）。
-托管：最简单是 GitHub Pages（反正提交要公开仓库）；或团队成员把 HTML 文件直接存到手机打开（麦克风需 https，这种情况只能手填噪声）。
+**Sampling plan:** a fixed route at Sat 14, 17, 20, 23 h and Sun 02 (optional), 08, 10 h → 6–7 rounds × ~20 areas ≈ **120–140 observations**. Each round is about 20–25 minutes for one person.
+
+**Quality control:**
+- fixed route order;
+- form with an area dropdown, automatic timestamp and range validation;
+- noise always measured with the same phone, or a side-by-side comparison of two phones at the start to get an offset;
+- each round, a second person independently recounts 2 random areas, giving an agreement measure;
+- only people counts are recorded: no photos of people, no identities.
+
+**App:** a "where to study now / at time X" recommender. Filters (quiet / outlets / group size / time) → area ranking, hourly crowding and noise curves, floor-plan heat colors, area detail page. Limitation: a weekend hackathon crowd ≠ a normal weekday.
+
+**Pros:** collected inside the venue, no long walks, easiest to execute; very practical. **Cons:** "noise / study space finder" is one of the official examples, so originality has to come from multiple dimensions, the 24-hour curves and in-browser noise measurement.
+
+## B. Refill Radar (water bottle filler map)
+**Question:** where is the nearest working filler with fast flow and a filter that hasn't expired? Which ones are used most?
+
+`stations.csv`: `station_id, building, floor, location_desc, type(bottle-filler/fountain/both), working(y/n), filter_led(green/yellow/red/none), bottle_counter, counter_ts, fill_500ml_s(mean of two), cold_rating(1–3), ada_height(y/n), lat, lon, photo`
+- Walk all stations Saturday afternoon and **read the counters again** Sunday morning → uses per station per hour (the "bottles saved" counter on the filler).
+- Scale: the MSC plus 4–6 nearby buildings ≈ 30–50 stations.
+
+**App:** a map with "nearest good filler", a flow-speed ranking, a list of filters that need replacing (could be reported to the university) and a usage heat map.
+**Pros:** the most original; the counter difference is a clever free sensor. **Cons:** other buildings may be locked on the weekend, so the sample could be small; requires walking.
+
+## C. Accessible Aggieland (accessible entrance audit)
+**Question:** which entrances around the MSC are truly accessible?
+
+`entrances.csv`: `entrance_id, building, side, step_free(y/n), ramp_slope_deg(phone level), ada_ok(slope ≤ 4.8°), auto_door_button(y/n/broken), open_delay_s, stay_open_s, door_width_in(tape measure / phone measure), surface(smooth/cracked), lat, lon, photo`
+- Scale: about 40 entrances in the MSC and 6–8 surrounding buildings; a pair of people for 3–4 hours.
+
+**App:** an accessible-route map that filters entrances by need (wheelchair, stroller, crutches) and flags broken buttons and too-steep ramps.
+**Pros:** strong social impact and rigorous measurement (slope against the ADA 1:12 standard). **Cons:** needs a tape measure and a lot of walking; doors may be locked on the weekend, so buttons can't be tested.
+
+---
+
+## Options without walking (second round)
+- **D. Datathon all-nighter reaction test (Sleep Debt Meter):** consenting participants take a 30-second reaction test on our phone or laptop (median of 5 tries), then answer anonymously: hours awake, cups of coffee or energy drinks today, hours slept. Ask 15–20 people 3–4 times between Saturday afternoon and Sunday morning → 60–100 people.
+  - App: take the test yourself, see your rank among people awake as long as you, see the room's reaction-time curve vs hours awake, and whether you should go sleep. The collection tool is the app itself. Optional phone-gyroscope "steady hands" test.
+  - Risk: judges may see the data as coming from a screen, so the video must show in-person table-by-table invitations and a uniform protocol.
+  - Rejected by the user: too little interactivity.
+- **E. Datathon food queue prediction:** at event mealtimes (Sat dinner, midnight snack, Sun breakfast), record the queue length every 3–5 minutes and time a sample of people from joining the line to getting food → "how long will I wait if I go now". Venue only, tied to the event's meal times. Small dataset (10–20 rows per meal).
+- **F. MSC food value:** photograph menu boards and prices of MSC restaurants (menus only, no people), enter price, portion and calories/protein where posted → a "most filling / most protein under $10" recommender. About 1 hour, MSC food court only.
+  - Risk: some places close on weekends; the data is mostly transcription, with little measurement.
+
+## Prior-art research (2026-11-07, DuckDuckGo)
+- **Study spots / noise (A), many look-alikes:** Devpost "StudySpot" (noise + crowd color map), "Study Hall Checker" (VT building occupancy) and several GitHub Campus-Study-Spot-Finder repos. TAMU Libraries already have an "Explore" study-space floor plan and "How busy are the libraries?". → A has low originality, but the MSC is not part of the library system.
+- **Water fillers (B):** Penn's official refill map, a BU CS506 course project, and a Devpost project with the same name "Refill Radar" (rename needed). TAMU fillers do have a "Plastic Bottles Saved" counter (Waymarking lists one in Schuhmacher Hall), but **we found no official TAMU filler map**. Nobody we found uses two counter readings to estimate usage.
+- **Accessibility (C):** Devpost "Access Maps" (community reports of ramp and elevator issues), a GitHub Campus Accessibility Map; TAMU hosted a Diversity Accessibility Hackathon. Measured slopes compared with the ADA standard are rare.
+- **What winners have in common:** a creative collection method.
+  - DataHacks 2026 winner BioByte: a wearable that measures heat index and maps campus hot spots.
+  - Packed: an ESP32 that estimates dining-hall crowding from Wi-Fi noise.
+  - TrippinTracker: sensors strapped to a teammate who walked to record 500+ samples.
+
+## Collection tool (shared approach)
+A single-page phone web form: works offline and stores data on the phone, with one-tap export/share as CSV. It stamps the time automatically and has dropdowns and range checks. Option A also had a "measure noise for 10 s with the microphone" button (uncalibrated dBFS, comparable within one phone; the sound-meter app reading stays the primary value).
+Hosting: GitHub Pages is the simplest (the submission needs a public repo anyway). Otherwise teammates open the HTML file saved on their phone, but the microphone and GPS need https, so noise would be entered by hand.
