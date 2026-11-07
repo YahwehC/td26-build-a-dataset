@@ -28,7 +28,7 @@
     rounds: [], round: LATEST,
     visible: new Set(LAYERS.map((l) => l.key)), glow: true,
     selected: null, tab: 'quiet', vendingQuery: '',
-    svg: null, markers: new Map(), markerLayer: null, firstPaint: true
+    map: null, view: (() => { try { return localStorage.getItem('msc-map-mode') === 'flat' ? 'flat' : 'iso'; } catch (e) { return 'iso'; } })(), firstPaint: true
   };
   const $ = (id) => document.getElementById(id);
 
@@ -128,23 +128,15 @@
   /* ---------------- controls ---------------- */
   function renderChips() {
     const nav = $('layer-chips');
-    nav.replaceChildren(...LAYERS.map((l, i) => h('button', {
-      type: 'button', class: 'chip', 'aria-pressed': String(S.visible.has(l.key)), style: `--chip-color:${l.color};--delay:${120 + i * 45}ms`,
+    nav.replaceChildren(...LAYERS.map((l) => h('button', {
+      type: 'button', class: 'layer', 'aria-pressed': String(S.visible.has(l.key)), style: `--c:${l.color}`,
       onclick: (e) => {
         S.visible.has(l.key) ? S.visible.delete(l.key) : S.visible.add(l.key);
         e.currentTarget.setAttribute('aria-pressed', String(S.visible.has(l.key)));
         applyVisibility();
         renderQuiet();
       }
-    }, h('span', { class: 'dot', 'aria-hidden': 'true' }, l.letter || 'dB'), l.label, h('span', { class: 'count' }, S.places.filter((p) => p.layer === l.key).length))),
-    h('button', {
-      type: 'button', class: 'chip', 'aria-pressed': 'true', style: '--chip-color:radial-gradient(circle,var(--loud),transparent 75%);--delay:360ms',
-      onclick: (e) => {
-        S.glow = !S.glow;
-        e.currentTarget.setAttribute('aria-pressed', String(S.glow));
-        $('map').classList.toggle('no-glow', !S.glow);
-      }
-    }, h('span', { class: 'dot', 'aria-hidden': 'true' }), 'Noise glow'));
+    }, h('i', { 'aria-hidden': 'true' }), l.label, h('span', { class: 'count' }, S.places.filter((p) => p.layer === l.key).length))));
   }
 
   function renderRounds() {
@@ -158,212 +150,156 @@
 
   function bindView() {
     const buttons = document.querySelectorAll('#view-toggle button');
-    const sync = () => buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === IsoMap.getMode())));
-    buttons.forEach((b) => b.addEventListener('click', () => { IsoMap.setMode(b.dataset.mode); sync(); }));
+    const sync = () => buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === S.view)));
+    buttons.forEach((b) => b.addEventListener('click', () => {
+      S.view = b.dataset.mode;
+      try { localStorage.setItem('msc-map-mode', S.view); } catch (e) { /* storage unavailable */ }
+      if (S.map) S.map.easeTo({ pitch: S.view === 'iso' ? 52 : 0, bearing: S.view === 'iso' ? -17 : 0, duration: reduced() ? 0 : 900 });
+      sync();
+    }));
     sync();
   }
 
-  /* ---------------- map + markers ---------------- */
+  /* ---------------- map (MapLibre GL) ---------------- */
+  // Plan pixels (sign-photo frame, 2000×1379) → small fake lon/lat around 0,0. 1 px ≈ 0.17 m, so the floor is ~280 m wide.
+  const SCALE = 0.0000015, OX = 980, OY = 780;
+  const toLL = (x, y) => [(x - OX) * SCALE, -(y - OY) * SCALE];
+  const STUDY_AREAS = [5, 8, 9, 15, 16], SHOP_AREAS = [13, 14, 17, 18, 19];
+  const tok = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  function parsePath(d) {
+    const t = d.match(/[MLZmlz]|-?\d*\.?\d+(?:e-?\d+)?/g) || [];
+    const rings = []; let ring = null, i = 0, cmd = 'M';
+    while (i < t.length) {
+      if (/[MLZmlz]/.test(t[i])) { cmd = t[i++].toUpperCase(); if (cmd === 'Z') { if (ring && ring.length > 2) rings.push(ring); ring = null; } continue; }
+      const x = +t[i++], y = +t[i++];
+      if (cmd === 'M') { if (ring && ring.length > 2) rings.push(ring); ring = [[x, y]]; cmd = 'L'; } else if (ring) ring.push([x, y]);
+    }
+    if (ring && ring.length > 2) rings.push(ring);
+    return rings.map((r) => { const ll = r.map(([x, y]) => toLL(x, y)); ll.push(ll[0]); return ll; });
+  }
+
+  function planGeo(svgText) {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const rooms = [], labels = [];
+    const outline = doc.querySelector('.plan-outline');
+    const floor = outline ? parsePath(outline.getAttribute('d')).map((ring) => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } })) : [];
+    doc.querySelectorAll('path.room').forEach((el) => {
+      const area = Number(el.dataset.area || el.getAttribute('data-area')) || 0;
+      const cls = el.getAttribute('class') || '';
+      const group = cls.includes('open') ? 'open' : cls.includes('service') ? 'service' : STUDY_AREAS.includes(area) ? 'study' : SHOP_AREAS.includes(area) ? 'shop' : 'other';
+      const height = group === 'open' ? 0.15 : group === 'service' ? 2 : area === 9 ? 4.2 : area === 14 ? 3.6 : 3;
+      parsePath(el.getAttribute('d')).forEach((ring) => rooms.push({ type: 'Feature', properties: { area, group, height }, geometry: { type: 'Polygon', coordinates: [ring] } }));
+    });
+    doc.querySelectorAll('.room-labels text, .area-names text').forEach((el) => {
+      const x = +el.getAttribute('x'), y = +el.getAttribute('y');
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      labels.push({ type: 'Feature', properties: { text: el.textContent.trim(), big: el.closest('.area-names') ? 1 : 0 }, geometry: { type: 'Point', coordinates: toLL(x, y) } });
+    });
+    return { floor, rooms, labels };
+  }
+
+  const fc = (features) => ({ type: 'FeatureCollection', features });
+
+  function roomColor() {
+    return ['match', ['get', 'group'], 'study', tok('--room-study'), 'shop', tok('--room-shop'), 'service', tok('--room-service'), 'open', tok('--room-open'), tok('--room')];
+  }
+
+  function placeFeatures() {
+    return S.places.map((p) => {
+      let color = tok('--' + p.layer), label = LAYER[p.layer].letter || '', text = '#ffffff', bandKey = '';
+      if (p.layer === 'study') {
+        const n = noiseFor(p.place_id); const b = band(n?.laeq);
+        color = b ? tok('--' + b.key) : tok('--unmeasured');
+        label = n ? String(Math.round(n.laeq)) : '–';
+        bandKey = b ? b.key : '';
+        if (bandKey === 'moderate') text = '#3a2b00';
+      } else if (stateFor(p.place_id).working === 'n') { color = tok('--unmeasured'); }
+      return { type: 'Feature', properties: { id: p.place_id, layer: p.layer, color, label, text, band: bandKey, study: p.layer === 'study' ? 1 : 0 }, geometry: { type: 'Point', coordinates: toLL(p.x, p.y) } };
+    });
+  }
+
   function installMap(svgText) {
-    const map = $('map');
-    map.innerHTML = svgText;
-    S.svg = map.querySelector('svg');
-    S.svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    IsoMap.attach(S.svg);
-    S.markerLayer = s('g', { id: 'markers' }, S.svg);
-    buildMarkers();
-    IsoMap.onFrame(positionMarkers);
-    new ResizeObserver(() => positionMarkers()).observe(map);
-    positionMarkers();
-    bindZoom(map);
-    // Open slightly zoomed onto the measured places so markers don't overlap.
-    const pts = S.places.map((p) => IsoMap.project(p.x, p.y, IsoMap.elevationAt(p.x, p.y)));
-    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
-    setTimeout(() => {
-      IsoMap.focusOn((Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, 1.35);
-      setTimeout(() => S.syncZoomed && S.syncZoomed(), 450);
-    }, reduced() ? 0 : 700);
+    if (!window.maplibregl) throw new Error('MapLibre did not load (needs internet).');
+    const geo = planGeo(svgText);
+    const pts = S.places.map((p) => toLL(p.x, p.y));
+    const all = [...pts, ...geo.floor.flatMap((f) => f.geometry.coordinates[0])];
+    const lo = [Math.min(...all.map((c) => c[0])), Math.min(...all.map((c) => c[1]))];
+    const hi = [Math.max(...all.map((c) => c[0])), Math.max(...all.map((c) => c[1]))];
+    const pad = 0.0008;
+    $('map').replaceChildren();
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: { version: 8, glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf', sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': tok('--map-bg') } }] },
+      bounds: [[Math.min(...pts.map((c) => c[0])), Math.min(...pts.map((c) => c[1]))], [Math.max(...pts.map((c) => c[0])), Math.max(...pts.map((c) => c[1]))]], fitBoundsOptions: { padding: (() => { const w = document.getElementById('map').clientWidth, p = Math.round(Math.min(90, w * 0.05)); return { top: Math.round(p * 0.8), bottom: Math.round(p * 0.8), left: p, right: p }; })() },
+      maxBounds: [[lo[0] - pad, lo[1] - pad], [hi[0] + pad, hi[1] + pad]],
+      pitch: S.view === 'iso' ? 52 : 0, bearing: S.view === 'iso' ? -17 : 0, maxPitch: 70,
+      attributionControl: false, dragRotate: true, renderWorldCopies: false
+    });
+    S.map = map;
+    window.mscMap = map; // handy for debugging in the console
+    map.on('error', (e) => console.warn('map:', e.error && e.error.message));
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+    map.on('load', () => {
+      map.addSource('floor', { type: 'geojson', data: fc(geo.floor) });
+      map.addSource('rooms', { type: 'geojson', data: fc(geo.rooms) });
+      map.addSource('labels', { type: 'geojson', data: fc(geo.labels) });
+      map.addSource('places', { type: 'geojson', data: fc(placeFeatures()) });
+      map.addLayer({ id: 'floor', type: 'fill-extrusion', source: 'floor', paint: { 'fill-extrusion-color': tok('--floor'), 'fill-extrusion-height': 0.1, 'fill-extrusion-base': 0 } });
+      map.addLayer({ id: 'rooms', type: 'fill-extrusion', source: 'rooms', paint: {
+        'fill-extrusion-color': roomColor(), 'fill-extrusion-height': ['get', 'height'], 'fill-extrusion-base': 0.1, 'fill-extrusion-opacity': 0.92, 'fill-extrusion-vertical-gradient': true } });
+      map.addLayer({ id: 'room-labels', type: 'symbol', source: 'labels', layout: {
+        'text-field': ['get', 'text'], 'text-font': ['Open Sans Semibold'], 'text-size': ['case', ['==', ['get', 'big'], 1], 11, 10],
+        'text-letter-spacing': ['case', ['==', ['get', 'big'], 1], 0.12, 0], 'text-allow-overlap': false },
+        paint: { 'text-color': tok('--plan-label'), 'text-halo-color': tok('--map-bg'), 'text-halo-width': 1 } });
+      map.addLayer({ id: 'noise-halo', type: 'circle', source: 'places', filter: ['==', ['get', 'study'], 1], paint: {
+        'circle-color': ['get', 'color'], 'circle-opacity': 0.16, 'circle-blur': 0.5, 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map',
+        'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 16, 2, 22, 140] } });
+      map.addLayer({ id: 'sel', type: 'circle', source: 'places', filter: ['==', ['get', 'id'], ''], paint: {
+        'circle-radius': 15, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': tok('--accent'), 'circle-stroke-width': 2.5 } });
+      map.addLayer({ id: 'places', type: 'circle', source: 'places', layout: { 'circle-sort-key': ['get', 'study'] }, paint: {
+        'circle-radius': ['case', ['==', ['get', 'study'], 1], 11, 8], 'circle-color': ['get', 'color'],
+        'circle-stroke-color': tok('--map-bg'), 'circle-stroke-width': 1.5 } });
+      map.addLayer({ id: 'place-labels', type: 'symbol', source: 'places', layout: {
+        'text-field': ['get', 'label'], 'text-font': ['Open Sans Semibold'], 'text-size': ['case', ['==', ['get', 'study'], 1], 11, 9],
+        'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'text'] } });
+      applyVisibility();
+      const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: 'tip', maxWidth: '240px' });
+      map.on('mousemove', 'places', (e) => {
+        const f = e.features[0]; const p = S.byId.get(f.properties.id);
+        map.getCanvas().style.cursor = 'pointer';
+        tip.setLngLat(f.geometry.coordinates).setDOMContent(h('div', {}, h('b', {}, p.name), h('span', {}, describe(p)))).addTo(map);
+      });
+      map.on('mouseleave', 'places', () => { map.getCanvas().style.cursor = ''; tip.remove(); });
+      map.on('click', 'places', (e) => select(e.features[0].properties.id, true));
+    });
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(recolor, 50));
   }
 
-  /* ---------------- zoom + pan ---------------- */
-  function toSvg(cx, cy) {
-    const pt = S.svg.createSVGPoint();
-    pt.x = cx; pt.y = cy;
-    return pt.matrixTransform(S.svg.getScreenCTM().inverse());
-  }
-  function bindZoom(map) {
-    const ptrs = new Map();
-    let pinch = null, moved = 0;
-    const syncZoomed = () => map.classList.toggle('is-zoomed', IsoMap.getCamera().z > 1.01);
-    map.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const p = toSvg(e.clientX, e.clientY);
-      IsoMap.zoomAt(Math.exp(-e.deltaY * 0.0016), p.x, p.y);
-      syncZoomed();
-    }, { passive: false });
-    map.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      moved = 0;
-      if (ptrs.size === 2) {
-        const [a, b] = [...ptrs.values()];
-        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) };
-      }
-    });
-    map.addEventListener('pointermove', (e) => {
-      const prev = ptrs.get(e.pointerId);
-      if (!prev) return;
-      const cur = { x: e.clientX, y: e.clientY };
-      ptrs.set(e.pointerId, cur);
-      if (ptrs.size === 2 && pinch) {
-        const [a, b] = [...ptrs.values()];
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
-        const mid = toSvg((a.x + b.x) / 2, (a.y + b.y) / 2);
-        IsoMap.zoomAt(d / pinch.d, mid.x, mid.y);
-        pinch.d = d;
-        moved += 10;
-      } else if (ptrs.size === 1) {
-        const dx = cur.x - prev.x, dy = cur.y - prev.y;
-        moved += Math.abs(dx) + Math.abs(dy);
-        if (moved > 4) {
-          if (!map.hasPointerCapture(e.pointerId)) map.setPointerCapture(e.pointerId);
-          map.classList.add('is-panning');
-          hideTip();
-          const k = unitsPerPx();
-          IsoMap.panBy(-dx * k, -dy * k);
-        }
-      }
-      syncZoomed();
-    });
-    const end = (e) => {
-      ptrs.delete(e.pointerId);
-      if (ptrs.size < 2) pinch = null;
-      if (!ptrs.size) map.classList.remove('is-panning');
-    };
-    map.addEventListener('pointerup', end);
-    map.addEventListener('pointercancel', end);
-    // A drag must not count as a click on a marker it started on.
-    map.addEventListener('click', (e) => { if (moved > 4) { e.stopPropagation(); e.preventDefault(); } }, true);
-    map.addEventListener('dblclick', (e) => {
-      const p = toSvg(e.clientX, e.clientY);
-      IsoMap.zoomAt(1.8, p.x, p.y, true);
-      setTimeout(syncZoomed, 450);
-    });
-    const zoomBtn = (f) => () => {
-      const vb = S.svg.viewBox.baseVal;
-      IsoMap.zoomAt(f, vb.x + vb.width / 2, vb.y + vb.height / 2, true);
-      setTimeout(syncZoomed, 450);
-    };
-    const tools = h('div', { class: 'map-tools' },
-      h('button', { type: 'button', 'aria-label': 'Zoom in', onclick: zoomBtn(1.6) }, '+'),
-      h('button', { type: 'button', 'aria-label': 'Zoom out', onclick: zoomBtn(1 / 1.6) }, '−'),
-      h('button', { type: 'button', class: 'reset', 'aria-label': 'Show the whole floor', onclick: () => { IsoMap.resetCamera(); setTimeout(syncZoomed, 450); } }, '⤢'));
-    map.parentElement.appendChild(tools);
-    S.syncZoomed = syncZoomed;
+  function recolor() {
+    const map = S.map;
+    if (!map || !map.getLayer('rooms')) return;
+    map.setPaintProperty('bg', 'background-color', tok('--map-bg'));
+    map.setPaintProperty('floor', 'fill-extrusion-color', tok('--floor'));
+    map.setPaintProperty('rooms', 'fill-extrusion-color', roomColor());
+    map.setPaintProperty('room-labels', 'text-color', tok('--plan-label'));
+    map.setPaintProperty('room-labels', 'text-halo-color', tok('--map-bg'));
+    map.setPaintProperty('places', 'circle-stroke-color', tok('--map-bg'));
+    map.setPaintProperty('sel', 'circle-stroke-color', tok('--accent'));
+    updateMarkers();
   }
 
-  function buildMarkers() {
-    // Pop-in order: back to front, after the blocks have grown.
-    const order = [...S.places].sort((a, b) => (a.x + a.y) - (b.x + b.y));
-    order.forEach((p, i) => {
-      const g = s('g', { class: 'marker', 'data-id': p.place_id, 'data-layer': p.layer, tabindex: '0', role: 'button' }, S.markerLayer);
-      const pop = s('g', { class: 'pop' }, g);
-      const enter = s('g', { class: reduced() ? '' : 'enter', style: `--delay:${900 + i * 34}ms` }, pop);
-      const m = { place: p, g, enter, parts: {} };
-      if (p.layer === 'study') m.parts.glow = s('ellipse', { class: 'glow', rx: 30, ry: 30 }, enter);
-      m.parts.shadow = s('ellipse', { class: 'shadow', rx: 7, ry: 2.8 }, enter);
-      const lift = s('g', { class: 'lift' }, enter);
-      m.parts.stem = s('line', { class: 'stem', x1: 0, y1: 0, x2: 0, y2: -16 }, lift);
-      const head = s('g', { class: 'head-g' }, lift);
-      m.parts.headG = head;
-      if (p.layer === 'study') {
-        m.parts.head = s('rect', { class: 'head', x: -17, y: -11, width: 34, height: 22, rx: 11 }, head);
-        m.parts.db = s('text', { class: 'db', y: 0.5 }, head);
-        m.parts.ring = s('rect', { class: 'ring', x: -21, y: -15, width: 42, height: 30, rx: 15 }, head);
-        m.parts.pulse = s('rect', { class: 'ring-pulse', x: -21, y: -15, width: 42, height: 30, rx: 15 }, head);
-      } else {
-        m.parts.head = s('rect', { class: 'head', x: -11, y: -11, width: 22, height: 22, rx: 7, fill: LAYER[p.layer].color }, head);
-        s('text', { class: 'glyph-text', y: 0.5 }, head).textContent = LAYER[p.layer].letter;
-        m.parts.slash = s('line', { class: 'slash', x1: -9, y1: 9, x2: 9, y2: -9, display: 'none' }, head);
-        m.parts.ring = s('rect', { class: 'ring', x: -15, y: -15, width: 30, height: 30, rx: 10 }, head);
-        m.parts.pulse = s('rect', { class: 'ring-pulse', x: -15, y: -15, width: 30, height: 30, rx: 10 }, head);
-      }
-      g.addEventListener('click', () => select(p.place_id, true));
-      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(p.place_id, true); } });
-      g.addEventListener('pointerenter', () => showTip(m));
-      g.addEventListener('pointerleave', hideTip);
-      g.addEventListener('focus', () => showTip(m));
-      g.addEventListener('blur', hideTip);
-      enter.addEventListener('animationend', () => enter.classList.remove('enter'), { once: true });
-      S.markers.set(p.place_id, m);
-    });
-    updateMarkers(false);
-  }
-
-  function unitsPerPx() {
-    const vb = S.svg.viewBox.baseVal;
-    const r = S.svg.getBoundingClientRect();
-    if (!r.width || !r.height) return 1;
-    return Math.max(vb.width / r.width, vb.height / r.height);
-  }
-
-  function positionMarkers() {
-    if (!S.svg) return;
-    const k = unitsPerPx() * (S.svg.getBoundingClientRect().width < 560 ? 0.72 : 1);
-    const morph = IsoMap.morph();
-    const placed = [];
-    S.markers.forEach((m) => {
-      const z = IsoMap.elevationAt(m.place.x, m.place.y);
-      const pt = IsoMap.project(m.place.x, m.place.y, z);
-      m.g.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)}) scale(${k.toFixed(3)})`);
-      const stem = 2 + 12 * morph;
-      m.parts.stem.setAttribute('y2', String(-stem));
-      m.parts.headG.setAttribute('transform', `translate(0 ${-(stem + 10)})`);
-      m.parts.shadow.setAttribute('opacity', String(0.25 + 0.75 * morph));
-      if (m.parts.glow) m.parts.glow.setAttribute('ry', String(30 * (1 - 0.42 * morph)));
-      placed.push([pt.y, m.g]);
-    });
-    placed.sort((a, b) => a[0] - b[0]).forEach(([, g]) => S.markerLayer.appendChild(g));
-  }
-
-  function tween(from, to, ms, fn) {
-    if (reduced() || from == null || to == null || from === to) { fn(to); return; }
-    const t0 = performance.now();
-    const step = (now) => {
-      const t = Math.min(1, (now - t0) / ms);
-      fn(from + (to - from) * (1 - Math.pow(1 - t, 3)));
-      if (t < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-
-  function updateMarkers(animate) {
-    S.markers.forEach((m) => {
-      const p = m.place;
-      if (p.layer === 'study') {
-        const n = noiseFor(p.place_id);
-        const b = band(n?.laeq);
-        const color = b ? `var(--${b.key})` : 'var(--unmeasured)';
-        m.g.dataset.band = b ? b.key : '';
-        m.parts.head.setAttribute('fill', color);
-        m.parts.glow.setAttribute('fill', color);
-        m.parts.glow.style.visibility = n ? 'visible' : 'hidden';
-        const to = n ? n.laeq : null;
-        const from = m.db;
-        m.db = to;
-        if (to == null) m.parts.db.textContent = '—';
-        else if (animate) tween(from, to, 420, (v) => { m.parts.db.textContent = Math.round(v); });
-        else m.parts.db.textContent = Math.round(to);
-      } else {
-        const st = stateFor(p.place_id);
-        m.parts.slash.setAttribute('display', st.working === 'n' ? 'inline' : 'none');
-      }
-    });
-    applyVisibility();
+  function updateMarkers() {
+    const src = S.map && S.map.getSource('places');
+    if (src) src.setData(fc(placeFeatures()));
   }
 
   function applyVisibility() {
-    S.markers.forEach((m) => m.g.classList.toggle('is-hidden', !S.visible.has(m.place.layer)));
+    const map = S.map;
+    if (!map || !map.getLayer('places')) return;
+    const f = ['in', ['get', 'layer'], ['literal', [...S.visible]]];
+    ['places', 'place-labels'].forEach((id) => map.setFilter(id, f));
+    map.setFilter('noise-halo', ['all', ['==', ['get', 'study'], 1], f]);
   }
 
   function describe(p) {
@@ -381,35 +317,16 @@
     return 'Not measured yet';
   }
 
-  function showTip(m) {
-    const tip = $('tooltip');
-    const card = tip.parentElement.getBoundingClientRect();
-    const r = m.parts.head.getBoundingClientRect();
-    tip.replaceChildren(h('b', {}, m.place.name), describe(m.place));
-    tip.style.left = (r.left + r.width / 2 - card.left) + 'px';
-    tip.style.top = (r.top - card.top) + 'px';
-    tip.hidden = false;
-  }
-  function hideTip() { $('tooltip').hidden = true; }
-
   function select(id, fromMap = false) {
     S.selected = id;
-    S.markers.forEach((m, mid) => {
-      m.g.classList.toggle('is-selected', mid === id);
-      if (mid === id) {
-        m.parts.pulse.classList.remove('ring-pulse'); void m.parts.pulse.getBBox(); m.parts.pulse.classList.add('ring-pulse');
-        m.parts.pulse.style.animation = 'none'; void m.parts.pulse.getBBox(); m.parts.pulse.style.animation = '';
-      }
-    });
+    if (S.map && S.map.getLayer('sel')) S.map.setFilter('sel', ['==', ['get', 'id'], id]);
     document.querySelectorAll('.rank').forEach((b) => b.classList.toggle('is-selected', b.dataset.id === id));
     setTab('details');
     renderDetails();
-    if (!fromMap) {
+    if (!fromMap && S.map) {
       const p = S.byId.get(id);
-      const pt = IsoMap.project(p.x, p.y, IsoMap.elevationAt(p.x, p.y));
-      IsoMap.focusOn(pt.x, pt.y, 2);
-      setTimeout(() => S.syncZoomed && S.syncZoomed(), 450);
-      if (window.innerWidth < 960) $('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' });
+      S.map.flyTo({ center: toLL(p.x, p.y), zoom: Math.max(S.map.getZoom(), 19), duration: reduced() ? 0 : 900, essential: true });
+      if (window.innerWidth < 820) $('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
     }
   }
 
@@ -591,7 +508,7 @@
       value: `${n.laeq?.toFixed(1)} dBA (max ${n.lmax?.toFixed(1)}, peak ${n.lcpeak?.toFixed(1)}, ${n.dur} s)`, src: n.source_file, note: n.note }));
     S.obs.filter((o) => o.place_id === p.place_id).forEach((o) => {
       const parts = [];
-      if (o.people) parts.push(`${o.people} people`);
+      if (o.people) parts.push(`${o.people} ${o.people === '1' ? 'person' : 'people'}`);
       if (o.seats_taken) parts.push(`${o.seats_taken} seats taken`);
       if (o.working) parts.push(o.working === 'y' ? 'working' : 'not working');
       if (o.cold) parts.push(`cold ${o.cold}/3`);
@@ -680,7 +597,7 @@
       [S.rounds.length, `collection round${S.rounds.length === 1 ? '' : 's'}` + (times.length ? `, ${fmtTime(times[0])} – ${fmtTime(times[times.length - 1])}` : '')],
       quiet && loud ? [`${(loud.laeq - quiet.laeq).toFixed(1)} dB`, `between the quietest (${S.byId.get(quiet.place_id).name}) and loudest (${S.byId.get(loud.place_id).name}) spot`] : null
     ].filter(Boolean);
-    $('facts').replaceChildren(...facts.map(([v, l]) => h('div', { class: 'fact' }, h('span', { class: 'fact-value' }, v), h('span', { class: 'fact-label' }, l))));
+    if ($('facts')) $('facts').replaceChildren(...facts.map(([v, l]) => h('div', { class: 'fact' }, h('span', { class: 'fact-value' }, v), h('span', { class: 'fact-label' }, l))));
   }
 
   /* ---------------- lightbox ---------------- */
@@ -774,7 +691,6 @@
       installMap(svgText);
       bindView();
       bindGlobalSearch();
-      renderFacts();
       setTab('quiet');
       S.firstPaint = false;
       refreshAll(false);

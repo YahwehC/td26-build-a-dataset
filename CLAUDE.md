@@ -48,7 +48,8 @@ User speaks Chinese → answer in Chinese; code, docs, specs in English. Delegat
 - `iso.js`: SVG isometric 2.5D renderer (flat/3D toggle, grow-in rooms, `IsoMap.project/elevationAt/onFrame`). `model3d.js`: procedural Three.js r160 models (vending/water/microwave/printer) built from our data; lazy-loaded by the "View in 3D" button. Sketchfab was blocked (403), so there are no third-party models.
 - `app.js`: loads all CSVs (photos/vending_items optional), markers at constant pixel size, quiet ranking with FLIP animation, vending search, details with photo lightbox and a measurement table with PDF links, water counter → bottles/hour.
 - Photos: put them in `data/raw/photos/<place_id>/R<n>-*.jpg` + `field-notes.csv`, then run `.venv\Scripts\python.exe tools/ingest.py` (strips EXIF, resizes, fills photos.csv, merges notes). Vending products: Claude reads the photos → `data/vending_items.csv` with `source_photo`.
-- Open: confirm Howdy room left/right placement; README needs v2 files.
+- v3 (user: "no big rounded cards, minimal, use an existing library"): map is MapLibre GL JS 4.7.1 (rooms parsed from assets/msc-floor1.svg into fake lon/lat GeoJSON, fill-extrusion; glyphs from demotiles.maplibre.org); iso.js removed; UI = full-bleed map + hairline sidebar, Inter font. The built-in browser pane pauses requestAnimationFrame when hidden, so MapLibre only renders while screenshots are taken; not a bug.
+- Open: confirm Howdy room left/right placement.
 
 ## Status
 - [x] Guide saved, ideas + prior-art research, concept chosen, team brief written.

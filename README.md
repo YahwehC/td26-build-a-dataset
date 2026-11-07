@@ -18,7 +18,7 @@ Then open http://localhost:8000. The app is static (HTML/CSS/JS, PapaParse from 
 | Path | What it is |
 |---|---|
 | `index.html`, `app.js`, `style.css` | The map app |
-| `iso.js` | Turns the flat plan into an isometric 2.5D view (extruded rooms, flat/3D toggle) |
+| Map engine | [MapLibre GL JS](https://maplibre.org/) 4.7.1 (BSD-3): our traced SVG rooms are converted to GeoJSON in the browser and drawn as 3D extrusions; markers, labels and zoom/rotate come from MapLibre |
 | `model3d.js` | Small 3D models of each amenity (Three.js), drawn by our code from our measurements, not from downloaded models |
 | `data/photos.csv`, `data/photos/` | Our field photos (EXIF/GPS removed, resized), one row per photo |
 | `data/vending_items.csv` | Products and prices, read by us from our vending-machine photos |

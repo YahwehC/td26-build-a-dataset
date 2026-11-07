@@ -4,111 +4,69 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>MSC Field Map</title>
-  <meta name="description" content="An interactive isometric map of the MSC 1st floor at Texas A&amp;M with noise levels, water fillers, vending machines, microwaves and printers, measured by our team at TAMU Datathon 2026.">
+  <meta name="description" content="Interactive 3D map of the MSC 1st floor at Texas A&amp;M: noise levels, water fillers, vending machines, microwaves and printers, measured by our team at TAMU Datathon 2026.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="top reveal">
-      <div class="brand">
-        <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
-          <rect class="logo-bg" width="64" height="64" rx="18"/>
-          <path class="logo-pin" d="M32 14c-7.2 0-13 5.6-13 12.6C19 35.8 32 50 32 50s13-14.2 13-23.4C45 19.6 39.2 14 32 14Zm0 17.4a4.8 4.8 0 1 1 0-9.6 4.8 4.8 0 0 1 0 9.6Z"/>
-        </svg>
-        <div>
-          <p class="eyebrow">TAMU Datathon 2026 · Build-A-Dataset</p>
-          <h1>MSC Field Map</h1>
-        </div>
-      </div>
-      <div class="gsearch" role="search">
-        <label class="gsearch-box">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <span class="visually-hidden">Search places and products</span>
-          <input id="global-search" type="search" placeholder="Find a quiet spot, water, snacks…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="global-results">
-        </label>
-        <ul id="global-results" class="gresults" role="listbox" hidden></ul>
-      </div>
-      <div class="controls">
-        <div class="control">
-          <span class="control-label" id="view-label">View</span>
-          <div class="seg" id="view-toggle" role="group" aria-labelledby="view-label">
-            <button type="button" data-mode="iso" aria-pressed="true">3D</button>
-            <button type="button" data-mode="flat" aria-pressed="false">Flat</button>
-          </div>
-        </div>
-        <div class="control">
-          <span class="control-label" id="round-label">Round</span>
-          <div class="seg" id="round-control" role="group" aria-labelledby="round-label"></div>
-        </div>
-      </div>
-    </header>
-
-    <p class="lede reveal">Memorial Student Center, 1st floor. <b>Every number here was measured by our team</b> on Nov 7–8, 2026.</p>
-    <nav class="chips reveal" id="layer-chips" aria-label="Map layers"></nav>
-
-    <main class="grid">
-      <section class="map-card reveal" aria-label="Map">
-        <div id="map" class="map"><p class="map-loading">Building the miniature MSC…</p></div>
-        <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
-        <div class="legend">
-          <div class="legend-group">
-            <span class="legend-title">Noise (LAeq)</span>
-            <span class="legend-item"><i class="sw sw-quiet"></i>Quiet &lt;50 dBA</span>
-            <span class="legend-item"><i class="sw sw-moderate"></i>Moderate 50–60</span>
-            <span class="legend-item"><i class="sw sw-loud"></i>Loud 60–70</span>
-            <span class="legend-item"><i class="sw sw-vloud"></i>Very loud ≥70</span>
-          </div>
-          <div class="legend-group">
-            <span class="legend-title">Places</span>
-            <span class="legend-item"><i class="glyph glyph-water">W</i>Water filler</span>
-            <span class="legend-item"><i class="glyph glyph-vending">V</i>Vending</span>
-            <span class="legend-item"><i class="glyph glyph-microwave">M</i>Microwaves</span>
-            <span class="legend-item"><i class="glyph glyph-printer">P</i>Printers</span>
-          </div>
-        </div>
-      </section>
-
-      <aside class="panel reveal" aria-label="Places">
-        <div class="tabs" role="tablist" aria-label="Panel">
-          <button type="button" role="tab" id="tab-quiet" aria-controls="panel-quiet" aria-selected="true">Quiet spots</button>
-          <button type="button" role="tab" id="tab-vending" aria-controls="panel-vending" aria-selected="false" tabindex="-1">Vending</button>
-          <button type="button" role="tab" id="tab-details" aria-controls="panel-details" aria-selected="false" tabindex="-1">Details</button>
-        </div>
-        <section id="panel-quiet" class="tab-panel" role="tabpanel" aria-labelledby="tab-quiet">
-          <p class="panel-intro">Study places from quietest to loudest, by the A-weighted average level we measured.</p>
-          <ol id="quiet-list" class="rank-list"></ol>
-        </section>
-        <section id="panel-vending" class="tab-panel" role="tabpanel" aria-labelledby="tab-vending" hidden>
-          <label class="search">
-            <span class="visually-hidden">Search products</span>
-            <input id="vending-search" type="search" placeholder="Search products, e.g. water" autocomplete="off">
-          </label>
-          <div id="vending-list"></div>
-        </section>
-        <section id="panel-details" class="tab-panel" role="tabpanel" aria-labelledby="tab-details" hidden>
-          <div id="details"></div>
-        </section>
-      </aside>
+  <div class="shell">
+    <main class="map-wrap" aria-label="Map">
+      <div id="map" class="map"><p class="map-msg">Loading map…</p></div>
     </main>
 
-    <section class="facts reveal" id="facts" aria-label="Dataset at a glance"></section>
+    <aside class="side" aria-label="Places">
+      <header class="head">
+        <h1>MSC Field Map</h1>
+        <p class="meta">1st floor · measured by us, Nov 7–8 2026</p>
+      </header>
 
-    <footer class="foot">
-      <p>Basemap: schematic plan traced by our team from the MSC directory sign; not to scale. Noise measured with NIOSH SLM on one iPhone; 3D amenity models are drawn by our code from our measurements.</p>
-      <p class="foot-links">
-        Data:
-        <a href="data/places.csv">places.csv</a> ·
+      <label class="search">
+        <span class="visually-hidden">Search places and products</span>
+        <input id="global-search" type="search" placeholder="Search: quiet, water, chips…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="global-results">
+        <ul id="global-results" class="gresults" role="listbox" hidden></ul>
+      </label>
+
+      <nav class="layers" id="layer-chips" aria-label="Map layers"></nav>
+
+      <div class="opts">
+        <div class="opt"><span class="opt-label" id="round-label">Round</span><div class="seg" id="round-control" role="group" aria-labelledby="round-label"></div></div>
+        <div class="opt"><span class="opt-label" id="view-label">View</span><div class="seg" id="view-toggle" role="group" aria-labelledby="view-label">
+          <button type="button" data-mode="iso" aria-pressed="true">3D</button><button type="button" data-mode="flat" aria-pressed="false">2D</button>
+        </div></div>
+      </div>
+
+      <p class="legend"><span>Noise, dBA</span>
+        <i class="sw sw-quiet"></i>&lt;50 <i class="sw sw-moderate"></i>50–60 <i class="sw sw-loud"></i>60–70 <i class="sw sw-vloud"></i>≥70</p>
+
+      <div class="tabs" role="tablist" aria-label="Panel">
+        <button type="button" role="tab" id="tab-quiet" aria-controls="panel-quiet" aria-selected="true">Quiet spots</button>
+        <button type="button" role="tab" id="tab-vending" aria-controls="panel-vending" aria-selected="false" tabindex="-1">Vending</button>
+        <button type="button" role="tab" id="tab-details" aria-controls="panel-details" aria-selected="false" tabindex="-1">Details</button>
+      </div>
+      <section id="panel-quiet" class="tab-panel" role="tabpanel" aria-labelledby="tab-quiet">
+        <ol id="quiet-list" class="rank-list"></ol>
+      </section>
+      <section id="panel-vending" class="tab-panel" role="tabpanel" aria-labelledby="tab-vending" hidden>
+        <input id="vending-search" class="filter" type="search" placeholder="Filter products" autocomplete="off" aria-label="Filter products">
+        <div id="vending-list"></div>
+      </section>
+      <section id="panel-details" class="tab-panel" role="tabpanel" aria-labelledby="tab-details" hidden>
+        <div id="details"></div>
+      </section>
+
+      <footer class="foot">
+        <a href="README.md">Methods &amp; limitations</a> ·
         <a href="data/noise.csv">noise.csv</a> ·
         <a href="data/observations.csv">observations.csv</a> ·
         <a href="data/vending_items.csv">vending_items.csv</a> ·
-        <a href="data/photos.csv">photos.csv</a> ·
-        <a href="README.md">Methods &amp; limitations</a>
-      </p>
-    </footer>
+        <a href="data/places.csv">places.csv</a>
+        <p>Plan traced by us from the MSC directory sign; not to scale.</p>
+      </footer>
+    </aside>
   </div>
 
   <dialog id="lightbox" class="modal" aria-label="Photo viewer">
@@ -127,17 +85,17 @@
     <div class="modal-card viewer-card">
       <button type="button" class="modal-close" data-close aria-label="Close">×</button>
       <header class="viewer-head">
-        <p class="eyebrow" id="viewer3d-kind"></p>
+        <p class="meta" id="viewer3d-kind"></p>
         <h2 id="viewer3d-title"></h2>
       </header>
       <div id="viewer3d-stage" class="viewer-stage"></div>
       <p id="viewer3d-pick" class="viewer-pick" aria-live="polite"></p>
-      <p class="viewer-note">Model drawn by our code from our measurements; not to scale. Drag to orbit.</p>
+      <p class="meta">Model drawn by our code from our measurements; not to scale. Drag to orbit.</p>
     </div>
   </dialog>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <script src="iso.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
