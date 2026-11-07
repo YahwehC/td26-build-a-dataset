@@ -1,0 +1,187 @@
+<title>MSC Field Brief</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one readable column, field-notebook feel; tables for "what to record", a timeline for rounds */
+:root{
+  --bg:#f7f6f5; --surface:#ffffff; --fg:#1f1b1c; --muted:#6a6264; --line:#ddd6d7;
+  --accent:#6e1423; --accent-soft:#f3e6e8; --warn:#8a5a00; --warn-soft:#fbf1dc;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#171415; --surface:#211d1e; --fg:#eee8e9; --muted:#a59c9e; --line:#3a3335;
+  --accent:#e28a98; --accent-soft:#3a2026; --warn:#f0c46a; --warn-soft:#3a2f17; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#171415; --surface:#211d1e; --fg:#eee8e9; --muted:#a59c9e; --line:#3a3335;
+  --accent:#e28a98; --accent-soft:#3a2026; --warn:#f0c46a; --warn-soft:#3a2f17; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:16px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+main{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:36px}
+h1,h2,h3{text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:2rem;font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.3rem;font-weight:600;padding-bottom:6px;border-bottom:2px solid var(--accent)}
+h3{font-size:1.05rem;font-weight:600}
+p,ul,ol{margin:0}
+section{display:flex;flex-direction:column;gap:14px}
+ul,ol{padding-left:1.25em;display:flex;flex-direction:column;gap:6px}
+.eyebrow{font-family:var(--mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:1.08rem;color:var(--fg)}
+.muted{color:var(--muted)}
+code,.mono{font-family:var(--mono);font-size:.88em}
+.note{background:var(--warn-soft);border-left:4px solid var(--warn);padding:10px 14px;border-radius:4px}
+.key{background:var(--accent-soft);padding:12px 16px;border-radius:6px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--accent-soft);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td:first-child{font-family:var(--mono);font-size:.85rem;white-space:nowrap}
+.when{font-family:var(--mono);font-size:.85rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.role{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.role b{font-size:1rem}
+pre{margin:0;font-family:var(--mono);font-size:.84rem;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;line-height:1.5}
+.tag{display:inline-block;font-family:var(--mono);font-size:.72rem;padding:1px 6px;border-radius:3px;background:var(--accent-soft);color:var(--accent);vertical-align:middle}
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:10px">
+  <span class="eyebrow">TAMU Datathon 2026 · Build-A-Dataset · draft plan</span>
+  <h1>MSC Field Brief: what we collect and who does it</h1>
+  <p class="lede">We are building an interactive map of the Memorial Student Center that answers a practical question: <b>where should I go right now?</b> It covers study spots, water bottle fillers and restrooms. The Aggie Map shows where buildings are. Our map shows which spot is quiet, which filler works, and which restroom has soap, using numbers we measure ourselves this weekend.</p>
+</header>
+
+<section>
+  <h2>Why we have to go out and measure</h2>
+  <p>The challenge requires that the <b>main dataset is collected by our team during the event</b>, in the physical world. The app must actually depend on that data. Judges score collection quality, app and data integration, creativity, usefulness and presentation (20 points each). Careful, honest records beat a big messy dataset.</p>
+  <div class="note"><b>Never make up a value.</b> If you didn't measure it, leave it blank and add a note. Fabricated data disqualifies the project.</div>
+</section>
+
+<section>
+  <h2>The plan in one minute</h2>
+  <ol>
+    <li><b>Round 0 (inventory, about 60 min):</b> each person walks their zone and logs <i>every</i> study spot, water filler and restroom, with its fixed details.</li>
+    <li><b>Rounds 1–4 (about 15 min each):</b> walk the same route again and log only the things that change: how many people, how loud, the filler counter number.</li>
+    <li>Between rounds, keep working on other challenges. Total effort is about <b>2 hours per person</b> across the weekend.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Schedule</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Round</th><th>When</th><th>What</th></tr></thead>
+    <tbody>
+      <tr><td>Calibrate</td><td class="when">Sat, before R0</td><td>Everyone stands at one spot and measures noise for 10 s at the same time. We use this to correct for phone differences.</td></tr>
+      <tr><td>R0</td><td class="when">Sat ~15:00</td><td>Inventory + first measurements. Restroom supply check. Water fill-time test.</td></tr>
+      <tr><td>R1</td><td class="when">Sat ~18:00</td><td>Study spots + filler counters.</td></tr>
+      <tr><td>R2</td><td class="when">Sat ~21:00</td><td>Study spots + filler counters.</td></tr>
+      <tr><td>R3</td><td class="when">Sun ~08:30</td><td>Study spots + filler counters.</td></tr>
+      <tr><td>R4</td><td class="when">Sun ~10:00</td><td>Study spots + filler counters + restroom supply check again. <b>Data cutoff 10:30.</b></td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Times are targets. Being 20 minutes late is fine; just let the form timestamp record when you actually measured. An optional midnight round adds a night data point if someone is awake anyway.</p>
+</section>
+
+<section>
+  <h2>Who does what</h2>
+  <p>The MSC public areas are split into zones based on the official MSC floor plans. We will adjust the zone borders on site after R0 if one zone is much bigger.</p>
+  <div class="roles">
+    <div class="role"><span class="tag">Zone 1</span><b>1st floor east</b><span class="muted">Hall of Honor, Veterans Lounge, Flag Room side</span><span>Men's restrooms in this zone</span></div>
+    <div class="role"><span class="tag">Zone 2</span><b>1st floor dining</b><span class="muted">Dining food court, dining lounge / eatery</span><span>Men's restrooms in this zone</span></div>
+    <div class="role"><span class="tag">Zone 3</span><b>2nd floor</b><span class="muted">Ballroom foyers, Forsyth / Reynolds galleries, lounges</span><span>Men's restrooms in this zone</span></div>
+    <div class="role"><span class="tag">Zone 4 + women's restrooms</span><b>West Wing</b><span class="muted">West Wing lower level and 2nd floor</span><span><b>All women's restrooms in every zone</b>, in R0 and R4 only</span></div>
+  </div>
+  <p>Our only female teammate covers the women's restrooms. Restroom details are only logged in R0 and R4, so this is two walks, not five. To keep her total load equal, she gets the smallest zone. All-gender and family restrooms can be logged by anyone. With only 3 people, Zones 1 and 2 merge.</p>
+  <p><b>Quality check:</b> in each round, also count <b>one study spot from your neighbor's zone</b> (Zone 1 checks one of Zone 2's spots, 2 checks 3, 3 checks 4, 4 checks 1). Two independent counts of the same spot tell judges how reliable our counts are.</p>
+</section>
+
+<section>
+  <h2>What to record</h2>
+  <p>Every record automatically gets the <b>time</b>, <b>your initials</b>, the <b>round</b> and the <b>zone</b>. Each place gets an ID when you first log it: <code>S</code> = study spot, <code>W</code> = water, <code>R</code> = restroom, <code>A</code> = other amenity, then zone and number, e.g. <code>S-Z2-03</code>. Reuse the same ID in every later round.</p>
+
+  <h3>Study spot <span class="tag">every round</span></h3>
+  <p class="muted">A study spot is any public seating area where someone could sit and work: a lounge, a group of tables, a row of counter seats. Not meeting rooms with a closed door and not restaurant seating behind a counter.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Field</th><th>Round</th><th>How to record</th></tr></thead>
+    <tbody>
+      <tr><td>name / location</td><td>R0</td><td>Short description, e.g. "Veterans Lounge, window side". Drop the pin on the form map.</td></tr>
+      <tr><td>floor</td><td>R0</td><td>Floor label as shown in the building (West Wing lower level = <code>WL</code>).</td></tr>
+      <tr><td>seats_total</td><td>R0</td><td>Number of chairs. For a couch or bench, count how many adults fit.</td></tr>
+      <tr><td>seat_type</td><td>R0</td><td><code>table</code> / <code>soft</code> (couches, lounge chairs) / <code>booth</code> / <code>counter</code> / <code>mixed</code></td></tr>
+      <tr><td>outlets</td><td>R0</td><td>Number of usable sockets reachable from a seat without a long cable. A standard plate has 2 sockets.</td></tr>
+      <tr><td>group_max</td><td>R0</td><td>Largest group that can sit together at one table or cluster.</td></tr>
+      <tr><td>natural_light</td><td>R0</td><td>y / n: is there a window in view?</td></tr>
+      <tr><td>people</td><td>every</td><td>Number of people in the area right now (sitting or standing there, not walking through).</td></tr>
+      <tr><td>seats_taken</td><td>every</td><td>Seats with a person <i>or</i> their stuff (bag, laptop) on them.</td></tr>
+      <tr><td>noise_db</td><td>every</td><td>Stand in the middle of the spot, phone at chest height, quiet yourself, measure for 10 s and record the <b>average</b> (LAeq) in dBA. Use the same app all weekend (iPhone: <i>NIOSH SLM</i>; Android: a free sound meter app).</td></tr>
+      <tr><td>note</td><td>every</td><td>Anything unusual: event setup, cleaning, area closed, game-day crowd.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Water filler / fountain <span class="tag">counter every round</span></h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Field</th><th>Round</th><th>How to record</th></tr></thead>
+    <tbody>
+      <tr><td>location / floor</td><td>R0</td><td>Description + pin, e.g. "next to 1st floor east restrooms".</td></tr>
+      <tr><td>type</td><td>R0</td><td><code>filler</code> (bottle filler) / <code>fountain</code> / <code>both</code></td></tr>
+      <tr><td>ada_height</td><td>R0</td><td>y / n: is there a lower spout or filler reachable from a wheelchair?</td></tr>
+      <tr><td>fill_500ml_s</td><td>R0</td><td>Seconds to fill our marked 500 ml bottle (one shared bottle for the team). Start the stopwatch when water starts and stop at the mark. Do it twice.</td></tr>
+      <tr><td>cold</td><td>R0</td><td>1 = room temperature, 2 = cool, 3 = cold</td></tr>
+      <tr><td>working</td><td>every</td><td>y / n</td></tr>
+      <tr><td>filter_light</td><td>every</td><td><code>green</code> / <code>yellow</code> / <code>red</code> / <code>none</code> (no indicator)</td></tr>
+      <tr><td>counter</td><td>every</td><td>The "bottles saved" number on the display. <b>Also take a photo of the display</b>; it is our proof. The difference between rounds tells us how often each filler is used.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Restroom <span class="tag">R0 and R4 only</span></h3>
+  <div class="note">Only enter a restroom that matches your gender, or an all-gender or family restroom. <b>No photos inside, ever.</b> If anyone is at the sinks or it feels awkward, skip it and come back later. We do not count people inside.</div>
+  <div class="scroll"><table>
+    <thead><tr><th>Field</th><th>Round</th><th>How to record</th></tr></thead>
+    <tbody>
+      <tr><td>location / floor</td><td>R0</td><td>Description + pin (outside the door).</td></tr>
+      <tr><td>kind</td><td>R0</td><td><code>men</code> / <code>women</code> / <code>all_gender</code> / <code>family</code></td></tr>
+      <tr><td>stalls</td><td>R0</td><td>Number of toilets (stalls + urinals separately for men's: <code>stalls</code>, <code>urinals</code>).</td></tr>
+      <tr><td>accessible_stall</td><td>R0</td><td>y / n: a wide stall with grab bars.</td></tr>
+      <tr><td>changing_table</td><td>R0</td><td>y / n: baby changing table.</td></tr>
+      <tr><td>soap_ok / towels_ok</td><td>R0, R4</td><td>y / n: at least one working soap dispenser; paper towels or a working dryer.</td></tr>
+      <tr><td>clean</td><td>R0, R4</td><td>5 = spotless · 4 = a little litter · 3 = visible litter or wet floor · 2 = dirty, trash overflowing · 1 = unusable</td></tr>
+      <tr><td>wait</td><td>R0, R4</td><td>Number of people waiting in line outside (usually 0).</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Other amenities <span class="tag">R0, optional</span></h3>
+  <p>If you pass one, log it with a pin: microwave, vending machine, charging station, printer, ATM, lactation room. Kind + location + working y/n is enough.</p>
+</section>
+
+<section>
+  <h2>How to record it</h2>
+  <p>A phone form is coming: you open a link, pick a place, tap in the numbers, and it stamps the time and saves on your phone even without signal. At the end of each round you tap <b>Export</b> and send the file to the team chat.</p>
+  <p>Until the link is ready, type one line per place in your Notes app in exactly this format:</p>
+<pre>R1 | S-Z2-03 | 18:04 | people 7 | taken 6/20 | 52 dB | note: none
+R1 | W-Z2-01 | 18:09 | working y | green | counter 48213
+R0 | R-Z4-02 | 15:31 | women | stalls 6 | acc y | chg y | soap y | towels y | clean 4 | wait 0</pre>
+</section>
+
+<section>
+  <h2>Rules while collecting</h2>
+  <ul>
+    <li>Do not photograph or film people's faces. Film fixtures, the counter display, your phone screen and your hands. We need a few short clips of collection for the 2-minute demo video, so take some.</li>
+    <li>Stay in public areas. Don't enter closed rooms, staff areas or events in progress, and don't block anyone.</li>
+    <li>If someone asks what you are doing, tell them: "We're mapping study spots and water fillers in the MSC for TAMU Datathon. We only count seats, we don't record anyone."</li>
+    <li>Record on the spot, not from memory afterwards.</li>
+    <li>Same route order every round, so each spot is measured at about the same offset from the round start.</li>
+    <li>Unsure? Write a note instead of guessing.</li>
+  </ul>
+</section>
+
+<section class="key">
+  <h3>Before R0, bring</h3>
+  <ul>
+    <li>Charged phone with the sound meter app installed and tested</li>
+    <li>The team's marked 500 ml bottle (Zone owners take turns, or bring your own and note its size)</li>
+    <li>This page open, plus the form link once it exists</li>
+  </ul>
+</section>
+</main>
