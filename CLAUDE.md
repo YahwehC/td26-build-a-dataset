@@ -35,6 +35,14 @@ User speaks Chinese → answer in Chinese; code, docs, specs in English. Delegat
 - Hosting the collection form: GitHub Pages needs a public repo (https is required for GPS/mic); alternatives are pending.
 - Confirm the zone borders on site after R0.
 
+## Build notes (2026-11-07 ~14:40)
+- R0 collected by the user 13:42–14:11: 11 NIOSH SLM PDF reports + labels sent in WeChat (`data/raw/noise/labels.csv` maps file → place), annotated sign photo, full sign photo with the area legend (`data/areas.csv`). "sr 1" = study room in the Flag Room; red dots on the photo are slips and are ignored.
+- Pipeline: `tools/parse_noise.py` → `data/noise.csv`. `data/places.csv` x/y are in the sign-photo pixel frame (2000×1379), the same frame as `assets/msc-floor1.svg` (traced by Claude; check alignment with `tools/overlay-check.html`).
+- Photos: `data/raw/photos/<place_id>/R<n>-*.jpg` + `field-notes.csv` (user fills in). Before committing photos: check for faces and strip EXIF GPS. A merge step from field-notes.csv into `data/observations.csv` is still TODO.
+- App v1 (DeepSeek, spec `specs/001-map-app.md`): `index.html`, `app.js`, `style.css`. Browser-tested by Claude on desktop and at 375 px: loads, no console errors, ranking/details/tooltips work. DeepSeek's sandbox could not run shell commands in this folder (SetNamedSecurityInfoW grantWrite error), so its acceptance commands were not run; Claude verified in the browser instead.
+- v2 TODO: show area names from areas.csv; photo gallery; merge field-notes; Flag Room labels overlap; markers small on phones; a Flag Room within-room noise comparison.
+- Local preview: `python -m http.server 8765 --bind 127.0.0.1` (the preview_start launch.json would have to live in the root `.claude/`, so it isn't used).
+
 ## Status
 - [x] Guide saved, ideas + prior-art research, concept chosen, team brief written.
 - [ ] Collection tool (phone form → CSV), schema in team brief.

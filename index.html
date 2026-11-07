@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Measured study places, water fillers, vending machines, microwaves and printers on the MSC 1st floor.">
+  <title>MSC Field Map</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the map</a>
+
+  <header class="site-header">
+    <div class="header-copy">
+      <p class="kicker">Field notes · MSC 1st floor</p>
+      <h1>MSC Field Map</h1>
+      <p class="subtitle">Memorial Student Center · 1st floor · measured by our team, Nov 7–8 2026</p>
+    </div>
+
+    <div class="header-controls">
+      <div class="layer-bar" role="group" aria-label="Layers">
+        <span class="control-label">Layers</span>
+        <button class="chip" type="button" data-layer="study" aria-pressed="true">
+          <span class="chip-dot chip-dot--study" aria-hidden="true"></span>
+          <span>Study places</span>
+          <span class="chip-count" data-count-for="study">0</span>
+        </button>
+        <button class="chip" type="button" data-layer="water" aria-pressed="true">
+          <span class="chip-dot chip-dot--water" aria-hidden="true"></span>
+          <span>Water fillers</span>
+          <span class="chip-count" data-count-for="water">0</span>
+        </button>
+        <button class="chip" type="button" data-layer="vending" aria-pressed="true">
+          <span class="chip-dot chip-dot--vending" aria-hidden="true"></span>
+          <span>Vending</span>
+          <span class="chip-count" data-count-for="vending">0</span>
+        </button>
+        <button class="chip" type="button" data-layer="microwave" aria-pressed="true">
+          <span class="chip-dot chip-dot--microwave" aria-hidden="true"></span>
+          <span>Microwaves</span>
+          <span class="chip-count" data-count-for="microwave">0</span>
+        </button>
+        <button class="chip" type="button" data-layer="printer" aria-pressed="true">
+          <span class="chip-dot chip-dot--printer" aria-hidden="true"></span>
+          <span>Printers</span>
+          <span class="chip-count" data-count-for="printer">0</span>
+        </button>
+        <span class="layer-divider" aria-hidden="true"></span>
+        <button class="chip chip--glow" id="glow-toggle" type="button" aria-pressed="true">
+          <span class="glow-dot" aria-hidden="true"></span>
+          <span>Noise glow</span>
+        </button>
+      </div>
+
+      <div class="round-row">
+        <span class="control-label" id="round-label">Round</span>
+        <div class="round-control" id="round-control" role="group" aria-labelledby="round-label"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout" id="main">
+    <section class="map-column" aria-label="Floor map and legends">
+      <div class="map-card">
+        <div class="map-frame">
+          <div class="map" id="map" role="region" aria-label="Interactive plan of the MSC 1st floor">
+            <p class="map-status" role="status">Loading map…</p>
+          </div>
+          <div class="marker-tooltip" id="marker-tooltip" role="tooltip" hidden></div>
+        </div>
+      </div>
+
+      <div class="legends">
+        <section class="legend-card" aria-labelledby="noise-legend-title">
+          <h2 id="noise-legend-title">Noise bands</h2>
+          <p class="legend-note">A-weighted LAeq, measured with NIOSH SLM.</p>
+          <ul class="legend-list band-legend">
+            <li><span class="swatch swatch--quiet" aria-hidden="true"></span><span><strong>Quiet</strong> &lt; 50 dBA</span></li>
+            <li><span class="swatch swatch--moderate" aria-hidden="true"></span><span><strong>Moderate</strong> 50–&lt;60 dBA</span></li>
+            <li><span class="swatch swatch--loud" aria-hidden="true"></span><span><strong>Loud</strong> 60–&lt;70 dBA</span></li>
+            <li><span class="swatch swatch--vloud" aria-hidden="true"></span><span><strong>Very loud</strong> ≥ 70 dBA</span></li>
+          </ul>
+        </section>
+
+        <section class="legend-card" aria-labelledby="symbol-legend-title">
+          <h2 id="symbol-legend-title">Map symbols</h2>
+          <p class="legend-note">Layer colors; a red slash means not working.</p>
+          <ul class="legend-list symbol-legend">
+            <li><span class="legend-symbol legend-symbol--study" aria-hidden="true"></span>Study place</li>
+            <li><span class="legend-symbol legend-symbol--water" aria-hidden="true">W</span>Water filler</li>
+            <li><span class="legend-symbol legend-symbol--vending" aria-hidden="true">V</span>Vending</li>
+            <li><span class="legend-symbol legend-symbol--microwave" aria-hidden="true">M</span>Microwave</li>
+            <li><span class="legend-symbol legend-symbol--printer" aria-hidden="true">P</span>Printer</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="Measurements panel">
+      <div class="tabs" role="tablist" aria-label="Measurement views">
+        <button class="tab" id="tab-quiet" type="button" role="tab" aria-selected="true" aria-controls="panel-quiet" tabindex="0">Quiet spots</button>
+        <button class="tab" id="tab-details" type="button" role="tab" aria-selected="false" aria-controls="panel-details" tabindex="-1">Details</button>
+      </div>
+
+      <section class="panel-body" id="panel-quiet" role="tabpanel" aria-labelledby="tab-quiet">
+        <div class="panel-heading">
+          <h2>Quiet spots</h2>
+          <p>Study places ranked by LAeq for the selected round. Click a row for all measurements.</p>
+        </div>
+        <ol class="quiet-list" id="quiet-list"></ol>
+      </section>
+
+      <section class="panel-body" id="panel-details" role="tabpanel" aria-labelledby="tab-details" hidden>
+        <div id="details-content">
+          <p class="empty-state">Select a place on the map or in Quiet spots.</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      Basemap: schematic traced by our team from the MSC directory sign; not to scale.
+      All values are our own measurements; see <a href="README.md">Data &amp; methods</a>.
+    </p>
+    <nav aria-label="Data files and notes">
+      <a href="data/places.csv">places.csv</a>
+      <a href="data/noise.csv">noise.csv</a>
+      <a href="data/observations.csv">observations.csv</a>
+      <a href="README.md">README.md</a>
+    </nav>
+  </footer>
+
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script defer src="app.js"></script>
+</body>
+</html>
