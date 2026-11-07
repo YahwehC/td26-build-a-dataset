@@ -166,8 +166,9 @@
   const toLL = (x, y) => [(x - OX) * SCALE, -(y - OY) * SCALE];
   const STUDY_AREAS = [5, 8, 9, 15, 16], SHOP_AREAS = [13, 14, 17, 18, 19];
   const tok = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
-  function parsePath(d) {
+  function parseRings(d) {
     const t = d.match(/[MLZmlz]|-?\d*\.?\d+(?:e-?\d+)?/g) || [];
     const rings = []; let ring = null, i = 0, cmd = 'M';
     while (i < t.length) {
@@ -176,28 +177,44 @@
       if (cmd === 'M') { if (ring && ring.length > 2) rings.push(ring); ring = [[x, y]]; cmd = 'L'; } else if (ring) ring.push([x, y]);
     }
     if (ring && ring.length > 2) rings.push(ring);
-    return rings.map((r) => { const ll = r.map(([x, y]) => toLL(x, y)); ll.push(ll[0]); return ll; });
+    return rings;
+  }
+  const ringLL = (r) => { const ll = r.map(([x, y]) => toLL(x, y)); ll.push(ll[0]); return ll; };
+  function inside([x, y], ring) {
+    let c = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
   }
 
   function planGeo(svgText) {
     const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
-    const rooms = [], labels = [];
+    const rooms = [], labels = [], plan = [];
     const outline = doc.querySelector('.plan-outline');
-    const floor = outline ? parsePath(outline.getAttribute('d')).map((ring) => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } })) : [];
+    const floor = outline ? parseRings(outline.getAttribute('d')).map((r) => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ringLL(r)] } })) : [];
     doc.querySelectorAll('path.room').forEach((el) => {
-      const area = Number(el.dataset.area || el.getAttribute('data-area')) || 0;
+      const area = Number(el.getAttribute('data-area')) || 0;
       const cls = el.getAttribute('class') || '';
       const group = cls.includes('open') ? 'open' : cls.includes('service') ? 'service' : STUDY_AREAS.includes(area) ? 'study' : SHOP_AREAS.includes(area) ? 'shop' : 'other';
-      const height = group === 'open' ? 0.15 : group === 'service' ? 2 : area === 9 ? 4.2 : area === 14 ? 3.6 : 3;
-      parsePath(el.getAttribute('d')).forEach((ring) => rooms.push({ type: 'Feature', properties: { area, group, height }, geometry: { type: 'Polygon', coordinates: [ring] } }));
+      // Miniature diorama: low blocks; models and markers stand on their tops.
+      const height = group === 'open' ? 0.05 : group === 'service' ? 0.8 : area === 9 ? 1.6 : area === 14 ? 1.4 : 1.2;
+      parseRings(el.getAttribute('d')).forEach((r) => {
+        const cx = r.reduce((s, p) => s + p[0], 0) / r.length, cy = r.reduce((s, p) => s + p[1], 0) / r.length;
+        const delay = Math.min(0.6, Math.hypot(cx - OX, cy - OY) / 1500);   // rise as a wave from the centre
+        plan.push({ ring: r, height });
+        rooms.push({ type: 'Feature', properties: { area, group, height, delay }, geometry: { type: 'Polygon', coordinates: [ringLL(r)] } });
+      });
     });
     doc.querySelectorAll('.room-labels text, .area-names text').forEach((el) => {
       const x = +el.getAttribute('x'), y = +el.getAttribute('y');
       if (!Number.isFinite(x) || !Number.isFinite(y)) return;
       labels.push({ type: 'Feature', properties: { text: el.textContent.trim(), big: el.closest('.area-names') ? 1 : 0 }, geometry: { type: 'Point', coordinates: toLL(x, y) } });
     });
-    return { floor, rooms, labels };
+    return { floor, rooms, labels, plan };
   }
+  const roofAt = (x, y) => (S.plan || []).reduce((h, r) => (inside([x, y], r.ring) ? Math.max(h, r.height) : h), 0.1);
 
   const fc = (features) => ({ type: 'FeatureCollection', features });
 
@@ -206,7 +223,7 @@
   }
 
   function placeFeatures() {
-    return S.places.map((p) => {
+    return S.places.map((p, i) => {
       let color = tok('--' + p.layer), label = LAYER[p.layer].letter || '', text = '#ffffff', bandKey = '';
       if (p.layer === 'study') {
         const n = noiseFor(p.place_id); const b = band(n?.laeq);
@@ -215,65 +232,160 @@
         bandKey = b ? b.key : '';
         if (bandKey === 'moderate') text = '#3a2b00';
       } else if (stateFor(p.place_id).working === 'n') { color = tok('--unmeasured'); }
-      return { type: 'Feature', properties: { id: p.place_id, layer: p.layer, color, label, text, band: bandKey, study: p.layer === 'study' ? 1 : 0 }, geometry: { type: 'Point', coordinates: toLL(p.x, p.y) } };
+      return { type: 'Feature', id: i, properties: { id: p.place_id, layer: p.layer, color, label, text, band: bandKey, study: p.layer === 'study' ? 1 : 0 }, geometry: { type: 'Point', coordinates: toLL(p.x, p.y) } };
     });
   }
 
   function installMap(svgText) {
     if (!window.maplibregl) throw new Error('MapLibre did not load (needs internet).');
     const geo = planGeo(svgText);
+    S.plan = geo.plan;
     const pts = S.places.map((p) => toLL(p.x, p.y));
     const all = [...pts, ...geo.floor.flatMap((f) => f.geometry.coordinates[0])];
     const lo = [Math.min(...all.map((c) => c[0])), Math.min(...all.map((c) => c[1]))];
     const hi = [Math.max(...all.map((c) => c[0])), Math.max(...all.map((c) => c[1]))];
+    const plo = [Math.min(...pts.map((c) => c[0])), Math.min(...pts.map((c) => c[1]))];
+    const phi = [Math.max(...pts.map((c) => c[0])), Math.max(...pts.map((c) => c[1]))];
     const pad = 0.0008;
-    $('map').replaceChildren();
+    const el = document.getElementById('map');
+    el.replaceChildren();
+    const w = el.clientWidth, p = Math.round(Math.min(90, w * 0.05));
     const map = new maplibregl.Map({
       container: 'map',
       style: { version: 8, glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf', sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': tok('--map-bg') } }] },
-      bounds: [[Math.min(...pts.map((c) => c[0])), Math.min(...pts.map((c) => c[1]))], [Math.max(...pts.map((c) => c[0])), Math.max(...pts.map((c) => c[1]))]], fitBoundsOptions: { padding: (() => { const w = document.getElementById('map').clientWidth, p = Math.round(Math.min(90, w * 0.05)); return { top: Math.round(p * 0.8), bottom: Math.round(p * 0.8), left: p, right: p }; })() },
+      bounds: [plo, phi], fitBoundsOptions: { padding: { top: Math.round(p * 0.8), bottom: Math.round(p * 0.8), left: p, right: p } },
       maxBounds: [[lo[0] - pad, lo[1] - pad], [hi[0] + pad, hi[1] + pad]],
-      pitch: S.view === 'iso' ? 52 : 0, bearing: S.view === 'iso' ? -17 : 0, maxPitch: 70,
-      attributionControl: false, dragRotate: true, renderWorldCopies: false
+      pitch: 0, bearing: 0, maxPitch: 70, attributionControl: false, renderWorldCopies: false
     });
     S.map = map;
     window.mscMap = map; // handy for debugging in the console
     map.on('error', (e) => console.warn('map:', e.error && e.error.message));
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+
+    // Intro: start flat and a bit far, then glide into the tilted 3D view.
+    const target = { center: map.getCenter(), zoom: map.getZoom() };
+    if (!reduced()) map.jumpTo({ zoom: target.zoom - 1.1, bearing: 28 });
+
     map.on('load', () => {
       map.addSource('floor', { type: 'geojson', data: fc(geo.floor) });
       map.addSource('rooms', { type: 'geojson', data: fc(geo.rooms) });
       map.addSource('labels', { type: 'geojson', data: fc(geo.labels) });
       map.addSource('places', { type: 'geojson', data: fc(placeFeatures()) });
-      map.addLayer({ id: 'floor', type: 'fill-extrusion', source: 'floor', paint: { 'fill-extrusion-color': tok('--floor'), 'fill-extrusion-height': 0.1, 'fill-extrusion-base': 0 } });
+      map.addLayer({ id: 'floor', type: 'fill-extrusion', source: 'floor', paint: { 'fill-extrusion-color': tok('--floor'), 'fill-extrusion-height': 0.05, 'fill-extrusion-base': 0 } });
       map.addLayer({ id: 'rooms', type: 'fill-extrusion', source: 'rooms', paint: {
-        'fill-extrusion-color': roomColor(), 'fill-extrusion-height': ['get', 'height'], 'fill-extrusion-base': 0.1, 'fill-extrusion-opacity': 0.92, 'fill-extrusion-vertical-gradient': true } });
+        'fill-extrusion-color': roomColor(), 'fill-extrusion-height': 0.06, 'fill-extrusion-base': 0.05, 'fill-extrusion-opacity': 0.96, 'fill-extrusion-vertical-gradient': true } });
       map.addLayer({ id: 'room-labels', type: 'symbol', source: 'labels', layout: {
         'text-field': ['get', 'text'], 'text-font': ['Open Sans Semibold'], 'text-size': ['case', ['==', ['get', 'big'], 1], 11, 10],
-        'text-letter-spacing': ['case', ['==', ['get', 'big'], 1], 0.12, 0], 'text-allow-overlap': false },
-        paint: { 'text-color': tok('--plan-label'), 'text-halo-color': tok('--map-bg'), 'text-halo-width': 1 } });
+        'text-letter-spacing': ['case', ['==', ['get', 'big'], 1], 0.12, 0] },
+        paint: { 'text-color': tok('--plan-label'), 'text-halo-color': tok('--map-bg'), 'text-halo-width': 1, 'text-opacity': 0, 'text-opacity-transition': { duration: 600, delay: 900 } } });
       map.addLayer({ id: 'noise-halo', type: 'circle', source: 'places', filter: ['==', ['get', 'study'], 1], paint: {
-        'circle-color': ['get', 'color'], 'circle-opacity': 0.16, 'circle-blur': 0.5, 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map',
-        'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 16, 2, 22, 140] } });
+        'circle-color': ['get', 'color'], 'circle-opacity': 0, 'circle-blur': 0.55, 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map',
+        'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 16, 2, 22, 150],
+        'circle-opacity-transition': { duration: 900, delay: 1500 }, 'circle-color-transition': { duration: 600 } } });
+      map.addLayer({ id: 'pulse', type: 'circle', source: 'places', filter: ['==', ['get', 'id'], ''], paint: {
+        'circle-radius': 12, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': tok('--accent'), 'circle-stroke-width': 2, 'circle-stroke-opacity': 0 } });
       map.addLayer({ id: 'sel', type: 'circle', source: 'places', filter: ['==', ['get', 'id'], ''], paint: {
         'circle-radius': 15, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': tok('--accent'), 'circle-stroke-width': 2.5 } });
-      map.addLayer({ id: 'places', type: 'circle', source: 'places', layout: { 'circle-sort-key': ['get', 'study'] }, paint: {
-        'circle-radius': ['case', ['==', ['get', 'study'], 1], 11, 8], 'circle-color': ['get', 'color'],
-        'circle-stroke-color': tok('--map-bg'), 'circle-stroke-width': 1.5 } });
-      map.addLayer({ id: 'place-labels', type: 'symbol', source: 'places', layout: {
-        'text-field': ['get', 'label'], 'text-font': ['Open Sans Semibold'], 'text-size': ['case', ['==', ['get', 'study'], 1], 11, 9],
-        'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'text'] } });
+      map.addLayer({ id: 'places', type: 'circle', source: 'places', filter: ['==', ['get', 'study'], 1], paint: {
+        'circle-radius': 0, 'circle-color': ['get', 'color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5,
+        'circle-radius-transition': { duration: 520, delay: 1300 }, 'circle-color-transition': { duration: 600 } } });
+      map.addLayer({ id: 'place-labels', type: 'symbol', source: 'places', filter: ['==', ['get', 'study'], 1], layout: {
+        'text-field': ['get', 'label'], 'text-font': ['Open Sans Semibold'], 'text-size': 11, 'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': ['get', 'text'], 'text-opacity': 0, 'text-opacity-transition': { duration: 400, delay: 1650 } } });
+
+      // Entrance choreography: camera glides in, rooms rise as a wave, markers and labels pop in.
+      map.easeTo({ center: target.center, zoom: target.zoom, pitch: S.view === 'iso' ? 52 : 0, bearing: S.view === 'iso' ? -17 : 0, duration: reduced() ? 0 : 2200, easing: easeOut });
+      riseRooms(reduced() ? 0 : 1300);
+      map.setPaintProperty('places', 'circle-radius', ['case', ['boolean', ['feature-state', 'hover'], false], 14, 11]);
+      map.setPaintProperty('places', 'circle-radius-transition', { duration: 520, delay: 0 });
+      setTimeout(() => map.setPaintProperty('places', 'circle-radius-transition', { duration: 160, delay: 0 }), 1900);
+      map.setPaintProperty('place-labels', 'text-opacity', 1);
+      map.setPaintProperty('room-labels', 'text-opacity', 1);
+      map.setPaintProperty('noise-halo', 'circle-opacity', ['case', ['boolean', ['feature-state', 'hover'], false], 0.3, 0.16]);
       applyVisibility();
-      const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: 'tip', maxWidth: '240px' });
-      map.on('mousemove', 'places', (e) => {
-        const f = e.features[0]; const p = S.byId.get(f.properties.id);
-        map.getCanvas().style.cursor = 'pointer';
-        tip.setLngLat(f.geometry.coordinates).setDOMContent(h('div', {}, h('b', {}, p.name), h('span', {}, describe(p)))).addTo(map);
-      });
-      map.on('mouseleave', 'places', () => { map.getCanvas().style.cursor = ''; tip.remove(); });
-      map.on('click', 'places', (e) => select(e.features[0].properties.id, true));
+      loadModels(map);
+      bindMapPointer(map);
+      pulseLoop();
     });
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(recolor, 50));
+  }
+
+  function riseRooms(ms) {
+    const map = S.map, t0 = performance.now();
+    const frame = () => {
+      const k = ms ? Math.min(1, (performance.now() - t0) / ms) : 1;
+      // Each room grows over the window [delay, delay + 0.4] of the shared clock k ∈ [0, 1].
+      map.setPaintProperty('rooms', 'fill-extrusion-height',
+        ['+', 0.06, ['*', ['-', ['get', 'height'], 0.06], ['min', 1, ['max', 0, ['/', ['-', k * 1.0, ['get', 'delay']], 0.4]]]]]);
+      if (k < 1) requestAnimationFrame(frame); else map.setPaintProperty('rooms', 'fill-extrusion-height', ['get', 'height']);
+    };
+    frame();
+  }
+
+  async function loadModels(map) {
+    try {
+      const mod = await import('./model3d.js');
+      const items = S.places.filter((p) => p.layer !== 'study').map((p) => ({
+        id: p.place_id, kind: p.layer, lngLat: toLL(p.x, p.y), base: roofAt(p.x, p.y), heading: -0.3, data: modelData(p)
+      }));
+      S.models = mod.createMapLayer(maplibregl, items, { origin: toLL(OX, OY), delay: reduced() ? 0 : 1500 });
+      map.addLayer(S.models.layer, 'noise-halo');
+      applyVisibility();
+      if (S.selected) S.models.setSelected(S.selected);
+    } catch (e) {
+      console.warn('3D models unavailable:', e.message);
+      // Fallback: show amenity markers as plain circles.
+      ['places', 'place-labels'].forEach((id) => map.setFilter(id, null));
+      applyVisibility();
+    }
+  }
+
+  function modelData(p) {
+    const st = stateFor(p.place_id);
+    if (p.layer === 'vending') return { working: st.working || '', items: itemsFor(p.place_id).map((i) => ({ ...i, price_usd: i.price })) };
+    if (p.layer === 'water') return { working: st.working || '', cold: num(st.cold), counter: num(st.counter), filter_light: st.filter_light || '' };
+    if (p.layer === 'microwave') return { units: num(st.units), units_working: num(st.units_working), extras: /utensil|napkin/i.test((p.note || '') + ' ' + (st.note || '')) ? ['utensils', 'napkins'] : [] };
+    return { units: num(st.units), units_working: num(st.units_working), broken_note: st.note || '' };
+  }
+
+  function bindMapPointer(map) {
+    const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16, className: 'tip', maxWidth: '240px' });
+    let hoverFid = null, hoverId = null;
+    const idAt = (pt) => {
+      const f = map.queryRenderedFeatures(pt, { layers: ['places'] })[0];
+      if (f) return { id: f.properties.id, fid: f.id };
+      const id = S.models ? S.models.pick(pt.x, pt.y) : null;
+      return id ? { id, fid: null } : null;
+    };
+    map.on('mousemove', (e) => {
+      const hit = idAt(e.point);
+      const id = hit ? hit.id : null;
+      if (hoverFid != null && (!hit || hit.fid !== hoverFid)) { map.setFeatureState({ source: 'places', id: hoverFid }, { hover: false }); hoverFid = null; }
+      if (hit && hit.fid != null && hit.fid !== hoverFid) { hoverFid = hit.fid; map.setFeatureState({ source: 'places', id: hoverFid }, { hover: true }); }
+      if (S.models) S.models.setHover(hit && hit.fid == null ? id : null);
+      map.getCanvas().style.cursor = id ? 'pointer' : '';
+      if (id !== hoverId) {
+        hoverId = id;
+        if (!id) tip.remove();
+        else { const p = S.byId.get(id); tip.setLngLat(toLL(p.x, p.y)).setDOMContent(h('div', {}, h('b', {}, p.name), h('span', {}, describe(p)))).addTo(map); }
+      }
+    });
+    map.getCanvas().addEventListener('mouseleave', () => { tip.remove(); hoverId = null; if (S.models) S.models.setHover(null); });
+    map.on('click', (e) => { const hit = idAt(e.point); if (hit) select(hit.id, true); });
+  }
+
+  // Selected marker: an expanding ring that repeats while something is selected.
+  function pulseLoop() {
+    const map = S.map;
+    const frame = (now) => {
+      if (S.selected && S.map.getLayer('pulse') && !reduced()) {
+        const t = (now % 1600) / 1600;
+        map.setPaintProperty('pulse', 'circle-radius', 13 + 22 * easeOut(t));
+        map.setPaintProperty('pulse', 'circle-stroke-opacity', 0.7 * (1 - t));
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
   }
 
   function recolor() {
@@ -284,8 +396,7 @@
     map.setPaintProperty('rooms', 'fill-extrusion-color', roomColor());
     map.setPaintProperty('room-labels', 'text-color', tok('--plan-label'));
     map.setPaintProperty('room-labels', 'text-halo-color', tok('--map-bg'));
-    map.setPaintProperty('places', 'circle-stroke-color', tok('--map-bg'));
-    map.setPaintProperty('sel', 'circle-stroke-color', tok('--accent'));
+    ['sel', 'pulse'].forEach((id) => map.setPaintProperty(id, 'circle-stroke-color', tok('--accent')));
     updateMarkers();
   }
 
@@ -297,9 +408,11 @@
   function applyVisibility() {
     const map = S.map;
     if (!map || !map.getLayer('places')) return;
-    const f = ['in', ['get', 'layer'], ['literal', [...S.visible]]];
-    ['places', 'place-labels'].forEach((id) => map.setFilter(id, f));
-    map.setFilter('noise-halo', ['all', ['==', ['get', 'study'], 1], f]);
+    const vis = ['in', ['get', 'layer'], ['literal', [...S.visible]]];
+    const studyOnly = S.models ? ['==', ['get', 'study'], 1] : true;
+    ['places', 'place-labels'].forEach((id) => map.setFilter(id, ['all', studyOnly, vis]));
+    map.setFilter('noise-halo', ['all', ['==', ['get', 'study'], 1], vis]);
+    if (S.models) S.models.setVisible([...S.visible]);
   }
 
   function describe(p) {
@@ -308,7 +421,7 @@
       const o = obsFor(p.place_id);
       if (!n) return 'Not measured yet';
       const b = band(n.laeq);
-      return `${n.laeq.toFixed(1)} dBA · ${b.label}${o && o.people ? ' · ' + o.people + ' people' : ''}`;
+      return `${n.laeq.toFixed(1)} dBA · ${b.label}${o && o.people ? ' · ' + o.people + (o.people === '1' ? ' person' : ' people') : ''}`;
     }
     const st = stateFor(p.place_id);
     if (p.layer === 'vending') { const it = itemsFor(p.place_id); return it.length ? `${it.length} products logged` : 'Products not logged yet'; }
@@ -319,14 +432,20 @@
 
   function select(id, fromMap = false) {
     S.selected = id;
-    if (S.map && S.map.getLayer('sel')) S.map.setFilter('sel', ['==', ['get', 'id'], id]);
+    const map = S.map;
+    if (map && map.getLayer('sel')) {
+      const isStudy = S.byId.get(id).layer === 'study';
+      map.setFilter('sel', isStudy ? ['==', ['get', 'id'], id] : ['==', ['get', 'id'], '']);
+      map.setFilter('pulse', isStudy ? ['==', ['get', 'id'], id] : ['==', ['get', 'id'], '']);
+    }
+    if (S.models) S.models.setSelected(id);
     document.querySelectorAll('.rank').forEach((b) => b.classList.toggle('is-selected', b.dataset.id === id));
     setTab('details');
     renderDetails();
-    if (!fromMap && S.map) {
+    if (map) {
       const p = S.byId.get(id);
-      S.map.flyTo({ center: toLL(p.x, p.y), zoom: Math.max(S.map.getZoom(), 19), duration: reduced() ? 0 : 900, essential: true });
-      if (window.innerWidth < 820) $('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
+      map.flyTo({ center: toLL(p.x, p.y), zoom: Math.max(map.getZoom(), fromMap ? map.getZoom() : 19), duration: reduced() ? 0 : 1000, essential: true });
+      if (!fromMap && window.innerWidth < 820) document.getElementById('map').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
     }
   }
 
@@ -652,12 +771,7 @@
     }
     if (!dlg.open) return;
     stage.replaceChildren();
-    const st = stateFor(p.place_id);
-    let data;
-    if (p.layer === 'vending') data = { working: st.working || '', items: itemsFor(p.place_id).map((i) => ({ ...i, price_usd: i.price })) };
-    else if (p.layer === 'water') data = { working: st.working || '', cold: num(st.cold), counter: num(st.counter), filter_light: st.filter_light || '' };
-    else if (p.layer === 'microwave') data = { units: num(st.units), units_working: num(st.units_working), extras: /utensil|napkin/i.test((p.note || '') + ' ' + (st.note || '')) ? ['utensils', 'napkins'] : [] };
-    else data = { units: num(st.units), units_working: num(st.units_working), broken_note: st.note || '' };
+    const data = modelData(p);
     V.handle = V.mod.open(stage, {
       kind: p.layer, title: p.name, data,
       onPick: (item) => { $('viewer3d-pick').textContent = item ? `${item.slot ? item.slot + ' · ' : ''}${item.product} · ${item.sold_out === 'y' ? 'sold out' : money(num(item.price_usd))}` : ''; }
