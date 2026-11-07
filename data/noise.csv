@@ -1,0 +1,12 @@
+obs_id,place_id,round,ts,duration_s,laeq_db,lmax_db,lcpeak_db,device,app,source_file,note
+N001,S-FR-C,R0,2026-11-07T13:42:45,20,47.4,51.9,72.2,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 13-42-45.pdf,
+N002,S-FR-BL,R0,2026-11-07T13:43:45,20,50.0,54.6,72.0,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 13-43-45.pdf,
+N003,S-FR-BR,R0,2026-11-07T13:44:43,20,51.4,61.0,73.5,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 13-44-43.pdf,no one playing the piano
+N004,S-FR-TR,R0,2026-11-07T13:45:45,20,46.1,59.3,86.5,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 13-45-45.pdf,
+N005,S-FR-TL,R0,2026-11-07T13:46:48,20,50.9,63.5,80.9,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 13-46-48.pdf,
+N006,S-HR-R,R0,2026-11-07T13:59:08,21,45.3,50.9,74.7,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 13-59-08.pdf,
+N007,S-HR-L,R0,2026-11-07T14:02:15,20,55.5,72.7,86.2,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 14-02-15.pdf,
+N008,S-AS,R0,2026-11-07T14:06:49,20,70.3,75.9,88.2,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 14-06-49.pdf,
+N009,S-A8-L,R0,2026-11-07T14:08:11,20,49.9,56.0,76.0,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 14-08-11.pdf,
+N010,S-A8-R,R0,2026-11-07T14:09:07,20,52.2,61.4,75.5,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 14-09-07.pdf,area 8 had 19 people
+N011,S-A5,R0,2026-11-07T14:10:54,21,44.7,62.3,72.7,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 14-10-54.pdf,1 person

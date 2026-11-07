@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="150 270 1660 1020" class="plan" role="img" aria-label="Schematic plan of the MSC 1st floor">
+  <!-- Schematic MSC 1st floor, hand-traced by our team from a photo of the MSC directory sign (2026-11-07).
+       Not to scale. Coordinates share the frame of data/raw/map/directory-sign-annotated-2026-11-07.webp (2000x1379 px),
+       so x/y in data/places.csv can be read straight off that photo. -->
+  <rect class="plan-bg" x="150" y="270" width="1660" height="1020"/>
+  <path class="plan-outline" d="M180 360 L730 320 L920 300 L920 350 L1255 340 L1260 395 L1640 320 L1760 320 L1760 1030 L1650 1035 L1650 1120 L1060 1160 L1060 1230 L410 1250 L410 1170 L272 1160 L272 1115 L180 1110 Z"/>
+  <g class="rooms">
+    <path class="room" data-area="1" d="M197 368 L678 340 L682 488 L395 500 L392 556 L200 560 Z"/>
+    <path class="room" data-area="1" d="M230 560 L392 556 L395 600 L440 600 L455 912 L262 918 L258 745 L232 745 Z"/>
+    <path class="room" d="M185 680 L235 680 L235 745 L188 745 Z"/>
+    <path class="room open" data-area="2" d="M600 560 L690 500 L690 870 L660 860 L600 700 Z"/>
+    <path class="room" data-area="5" d="M780 420 L1000 408 L1005 495 L785 512 Z"/>
+    <path class="room" data-area="6" d="M785 512 L1010 503 L1012 560 L860 600 L862 650 L792 655 Z"/>
+    <path class="room" data-area="7" d="M1022 418 L1190 410 L1192 472 L1025 478 Z"/>
+    <path class="room" d="M1030 480 L1192 476 L1195 558 L1042 565 Z"/>
+    <path class="room" data-area="8" d="M865 605 L1042 567 L1195 560 L1198 820 L1032 826 L1030 855 L800 858 L797 680 L866 680 Z"/>
+    <path class="room" data-area="9" d="M1238 565 L1428 555 L1430 820 L1242 826 Z"/>
+    <path class="room service" d="M1318 483 L1426 480 L1427 555 L1320 557 Z"/>
+    <path class="room" data-area="11" d="M1430 382 L1600 375 L1600 440 L1672 440 L1673 775 L1432 788 Z"/>
+    <path class="room" data-area="10" d="M1445 878 L1635 865 L1637 1040 L1447 1112 Z"/>
+    <path class="room" data-area="14" d="M808 890 L1068 892 L1068 965 L1162 962 L1162 890 L1445 880 L1447 1112 L900 1140 L808 1140 Z"/>
+    <path class="room service" d="M1068 892 L1162 890 L1162 962 L1068 965 Z"/>
+    <path class="room" data-area="15" d="M700 858 L800 858 L805 1150 L705 1150 Z"/>
+    <path class="room" data-area="17" d="M545 935 L610 935 L612 1100 L462 1103 L460 1068 L545 1060 Z"/>
+    <path class="room service" d="M610 935 L680 935 L683 1100 L612 1100 Z"/>
+    <path class="room" data-area="18" d="M318 1118 L650 1108 L652 1160 L320 1172 Z"/>
+    <path class="room" d="M900 1175 L1050 1172 L1052 1210 L900 1215 Z"/>
+  </g>
+  <g class="room-labels">
+    <text x="430" y="432">1</text>
+    <text x="597" y="745">2</text>
+    <text x="869" y="472">5</text>
+    <text x="874" y="557">6</text>
+    <text x="1098" y="458">7</text>
+    <text x="995" y="725">8</text>
+    <text x="1333" y="702">9</text>
+    <text x="1526" y="558">11</text>
+    <text x="1478" y="917">10</text>
+    <text x="1543" y="965">13</text>
+    <text x="1366" y="1043">14</text>
+    <text x="725" y="921">15</text>
+    <text x="733" y="1038">16</text>
+    <text x="660" y="1112">17</text>
+    <text x="562" y="1140">18</text>
+    <text x="388" y="1148">19</text>
+  </g>
+  <g class="area-names">
+    <text x="1335" y="745">FLAG ROOM</text>
+  </g>
+  <g class="plan-icons">
+    <g class="icon restroom"><circle cx="1375" cy="500" r="11"/><circle cx="1375" cy="536" r="11"/><circle cx="1088" cy="930" r="11"/><circle cx="1140" cy="930" r="11"/><circle cx="637" cy="990" r="11"/><circle cx="640" cy="1060" r="11"/></g>
+    <g class="icon elevator"><rect x="1310" y="798" width="46" height="28" rx="3"/><rect x="820" y="1128" width="46" height="28" rx="3"/></g>
+    <g class="icon stairs"><rect x="1250" y="462" width="52" height="58"/><rect x="690" y="492" width="48" height="56"/><rect x="180" y="610" width="48" height="70"/><rect x="1258" y="895" width="54" height="50"/><rect x="755" y="1062" width="26" height="80"/><rect x="304" y="1178" width="40" height="48"/><rect x="708" y="1196" width="46" height="44"/><rect x="990" y="1172" width="62" height="40"/></g>
+    <g class="icon entrance"><path d="M850 280 L874 280 L862 298 Z"/><path d="M1268 360 L1294 360 L1281 380 Z"/><path d="M1684 284 L1710 284 L1697 306 Z"/><path d="M1675 1060 L1701 1060 L1688 1038 Z"/><path d="M372 1286 L398 1286 L385 1264 Z"/><path d="M797 1270 L823 1270 L810 1248 Z"/></g>
+    <g class="icon you-are-here"><path d="M1680 770 L1688 788 L1707 790 L1693 802 L1697 821 L1680 811 L1663 821 L1667 802 L1653 790 L1672 788 Z"/><text x="1680" y="848">directory sign</text></g>
+  </g>
+</svg>

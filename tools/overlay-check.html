@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Plan overlay check</title>
+<!-- Dev tool: overlays the traced SVG plan and data/places.csv points on the directory-sign photo. Serve the repo root over http. -->
+<style>
+  body{margin:0;background:#222;color:#eee;font:14px system-ui}
+  #wrap{position:relative;width:2000px;height:1379px}
+  #wrap img{position:absolute;left:0;top:0;width:2000px;height:1379px;opacity:.55}
+  #wrap svg.over{position:absolute;left:0;top:0;width:2000px;height:1379px}
+  .room{fill:rgba(0,160,255,.25);stroke:#0af;stroke-width:3}
+  .service{fill:rgba(255,200,0,.25)}
+  .plan-bg,.plan-outline{fill:none}
+  .plan-outline{stroke:#f0f;stroke-width:2}
+  .room-labels text{fill:#0ff;font-size:30px}
+  .icon{fill:#ff0}
+  .pt{fill:#f33;stroke:#fff;stroke-width:3}
+  .pt-label{fill:#fff;font-size:18px}
+</style>
+<div id="wrap"><img src="../data/raw/map/directory-sign-annotated-2026-11-07.webp" alt=""></div>
+<script>
+(async () => {
+  const svgText = await (await fetch('../assets/msc-floor1.svg')).text();
+  const wrap = document.getElementById('wrap');
+  const holder = document.createElement('div');
+  holder.innerHTML = svgText;
+  const svg = holder.querySelector('svg');
+  svg.setAttribute('viewBox', '0 0 2000 1379');
+  svg.classList.add('over');
+  wrap.appendChild(svg);
+  const csv = await (await fetch('../data/places.csv')).text();
+  const [head, ...lines] = csv.trim().split(/\r?\n/);
+  const cols = head.split(',');
+  for (const line of lines) {
+    const v = line.split(',');
+    const r = Object.fromEntries(cols.map((c, i) => [c, v[i]]));
+    const ns = 'http://www.w3.org/2000/svg';
+    const c = document.createElementNS(ns, 'circle');
+    c.setAttribute('cx', r.x); c.setAttribute('cy', r.y); c.setAttribute('r', 9); c.setAttribute('class', 'pt');
+    const t = document.createElementNS(ns, 'text');
+    t.setAttribute('x', +r.x + 12); t.setAttribute('y', +r.y - 10); t.setAttribute('class', 'pt-label'); t.textContent = r.place_id;
+    svg.append(c, t);
+  }
+})();
+</script>
