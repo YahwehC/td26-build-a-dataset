@@ -18,7 +18,7 @@ Then open http://localhost:8000. The app is static (HTML/CSS/JS; Three.js from j
 | Path | What it is |
 |---|---|
 | `index.html`, `app.js`, `style.css` | The map app |
-| `scene.js` | The map: a dark "digital twin" of the floor in [Three.js](https://threejs.org/) (MIT). Our traced rooms become low walls with glowing edges; each study place glows in its noise colour with sound ripples; amenities are holographic models. The visual style (palette, unlit vertex shading, additive edge lines, ground grid, callouts) is adapted from [neonplan3d](https://github.com/Mastershort/neonplan3d) (c) 2026 Mastershort, MIT License |
+| `plan2d.js` | The map: our traced floor plan drawn as a flat SVG with value pins (the "price pill" pattern of map-search sites such as Airbnb), so the measured dBA is readable at a glance. Pan/zoom (wheel, drag, pinch); nearby amenity pins merge into a counted cluster; overlapping pins are nudged apart; area names go where they cover the fewest pins. No map library |
 | `model3d.js` | Small 3D models of each amenity (Three.js), drawn by our code from our measurements, not from downloaded models |
 | `data/photos.csv`, `data/photos/` | Our field photos (EXIF/GPS removed, resized), one row per photo |
 | `data/vending_items.csv` | Products and prices, read by us from our vending-machine photos |

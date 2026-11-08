@@ -4,49 +4,55 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>MSC Field Map</title>
-  <meta name="description" content="Interactive 3D map of the MSC 1st floor at Texas A&amp;M: noise levels, water fillers, vending machines, microwaves and printers, measured by our team at TAMU Datathon 2026.">
+  <meta name="description" content="Interactive map of the MSC 1st floor at Texas A&amp;M: noise levels, water fillers, vending machines, microwaves and printers, measured by our team at TAMU Datathon 2026.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&display=swap">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">M</span>
+      <div>
+        <h1>MSC Field Map</h1>
+        <p class="meta">Memorial Student Center, 1st floor · measured by our team, Nov 7–8 2026</p>
+      </div>
+    </div>
+    <label class="search">
+      <span class="visually-hidden">Search places and products</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+      <input id="global-search" type="search" placeholder="Search “quiet”, “water”, “chips”…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="global-results">
+      <ul id="global-results" class="gresults" role="listbox" hidden></ul>
+    </label>
+    <div class="round">
+      <span class="round-label" id="round-label">Data from</span>
+      <div class="seg" id="round-control" role="group" aria-labelledby="round-label"></div>
+    </div>
+  </header>
+
   <div class="shell">
     <main class="map-wrap" aria-label="Map">
       <div id="map" class="map"><p class="map-msg">Loading map…</p></div>
+      <nav class="layers" id="layer-chips" aria-label="Map layers"></nav>
+      <div class="legend" aria-label="Noise colour scale">
+        <span class="legend-title">Noise level, dBA (LAeq)</span>
+        <div class="legend-bar"><i class="sw-quiet"></i><i class="sw-moderate"></i><i class="sw-loud"></i><i class="sw-vloud"></i></div>
+        <div class="legend-ticks"><span>&lt;50</span><span>50</span><span>60</span><span>70+</span></div>
+      </div>
     </main>
 
     <aside class="side" aria-label="Places">
-      <header class="head">
-        <h1>MSC Field Map</h1>
-        <p class="meta">1st floor · measured by us, Nov 7–8 2026</p>
-      </header>
-
-      <label class="search">
-        <span class="visually-hidden">Search places and products</span>
-        <input id="global-search" type="search" placeholder="Search: quiet, water, chips…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="global-results">
-        <ul id="global-results" class="gresults" role="listbox" hidden></ul>
-      </label>
-
-      <nav class="layers" id="layer-chips" aria-label="Map layers"></nav>
-
-      <div class="opts">
-        <div class="opt"><span class="opt-label" id="round-label">Round</span><div class="seg" id="round-control" role="group" aria-labelledby="round-label"></div></div>
-        <div class="opt"><span class="opt-label" id="view-label">View</span><div class="seg" id="view-toggle" role="group" aria-labelledby="view-label">
-          <button type="button" data-mode="iso" aria-pressed="true">3D</button><button type="button" data-mode="flat" aria-pressed="false">2D</button>
-        </div></div>
-      </div>
-
-      <p class="legend"><span>Noise, dBA</span>
-        <i class="sw sw-quiet"></i>&lt;50 <i class="sw sw-moderate"></i>50–60 <i class="sw sw-loud"></i>60–70 <i class="sw sw-vloud"></i>≥70</p>
+      <section class="facts" id="facts" aria-label="Dataset at a glance"></section>
 
       <div class="tabs" role="tablist" aria-label="Panel">
-        <button type="button" role="tab" id="tab-quiet" aria-controls="panel-quiet" aria-selected="true">Quiet spots</button>
+        <button type="button" role="tab" id="tab-quiet" aria-controls="panel-quiet" aria-selected="true">Quietest spots</button>
         <button type="button" role="tab" id="tab-vending" aria-controls="panel-vending" aria-selected="false" tabindex="-1">Vending</button>
         <button type="button" role="tab" id="tab-details" aria-controls="panel-details" aria-selected="false" tabindex="-1">Details</button>
       </div>
       <section id="panel-quiet" class="tab-panel" role="tabpanel" aria-labelledby="tab-quiet">
+        <p class="panel-intro" id="quiet-intro">Ranked by measured noise. The bar shows 40–75 dBA; the grey line is the range across rounds.</p>
         <ol id="quiet-list" class="rank-list"></ol>
       </section>
       <section id="panel-vending" class="tab-panel" role="tabpanel" aria-labelledby="tab-vending" hidden>
@@ -58,11 +64,7 @@
       </section>
 
       <footer class="foot">
-        <a href="README.md">Methods &amp; limitations</a> ·
-        <a href="data/noise.csv">noise.csv</a> ·
-        <a href="data/observations.csv">observations.csv</a> ·
-        <a href="data/vending_items.csv">vending_items.csv</a> ·
-        <a href="data/places.csv">places.csv</a>
+        <p><a href="README.md">Methods &amp; limitations</a> · Data: <a href="data/noise.csv">noise</a>, <a href="data/observations.csv">observations</a>, <a href="data/vending_items.csv">vending</a>, <a href="data/places.csv">places</a></p>
         <p>Plan traced by us from the MSC directory sign; not to scale.</p>
       </footer>
     </aside>

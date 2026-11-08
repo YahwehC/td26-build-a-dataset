@@ -1,4 +1,4 @@
-/* MSC Field Map: app logic. Loads our CSVs, draws the 3D cartoon floor (scene.js),
+/* MSC Field Map: app logic. Loads our CSVs, draws the 2D floor plan with value pins (plan2d.js),
  * and drives the ranking, vending search, details, photo lightbox and 3D viewer (model3d.js). */
 (() => {
   'use strict';
@@ -28,7 +28,7 @@
     rounds: [], round: LATEST,
     visible: new Set(LAYERS.map((l) => l.key)), glow: true,
     selected: null, tab: 'quiet', vendingQuery: '',
-    scene: null, view: (() => { try { return localStorage.getItem('msc-map-mode') === 'flat' ? 'flat' : 'iso'; } catch (e) { return 'iso'; } })(), firstPaint: true
+    scene: null, firstPaint: true
   };
   const $ = (id) => document.getElementById(id);
 
@@ -139,28 +139,21 @@
     }, h('i', { 'aria-hidden': 'true' }), l.label, h('span', { class: 'count' }, S.places.filter((p) => p.layer === l.key).length))));
   }
 
+  // Round buttons show when each round started, e.g. "R1 · Sat 6:03 PM".
+  function roundStart(r) {
+    const ts = [...S.noise, ...S.obs].filter((x) => x.round === r && x.t).map((x) => x.t).sort((a, b) => a - b);
+    return ts[0] || null;
+  }
   function renderRounds() {
     const seg = $('round-control');
-    const opts = [[LATEST, 'Latest'], ...S.rounds.map((r) => [r, r])];
-    seg.replaceChildren(...opts.map(([v, label]) => h('button', {
-      type: 'button', 'aria-pressed': String(S.round === v),
+    const opts = [[LATEST, 'Latest', 'newest reading per place'], ...S.rounds.map((r) => [r, r, roundStart(r) ? fmtTime(roundStart(r)) : ''])];
+    seg.replaceChildren(...opts.map(([v, label, sub]) => h('button', {
+      type: 'button', 'aria-pressed': String(S.round === v), title: sub,
       onclick: () => { if (S.round === v) return; S.round = v; renderRounds(); refreshAll(true); }
-    }, label)));
+    }, h('b', {}, label), sub && v !== LATEST ? h('small', {}, sub) : '')));
   }
 
-  function bindView() {
-    const buttons = document.querySelectorAll('#view-toggle button');
-    const sync = () => buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === S.view)));
-    buttons.forEach((b) => b.addEventListener('click', () => {
-      S.view = b.dataset.mode;
-      try { localStorage.setItem('msc-map-mode', S.view); } catch (e) { /* storage unavailable */ }
-      if (S.scene) S.scene.setView(S.view);
-      sync();
-    }));
-    sync();
-  }
-
-  /* ---------------- map (3D cartoon diorama, scene.js) ---------------- */
+  /* ---------------- map (flat 2D plan with value pins, plan2d.js) ---------------- */
   const tok = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   function modelData(p) {
@@ -196,12 +189,13 @@
   async function installMap(svgText) {
     const el = $('map');
     let mod;
-    try { mod = await import('./scene.js'); } catch (e) { throw new Error('3D engine did not load (Three.js needs internet).'); }
+    mod = await import('./plan2d.js');
     el.replaceChildren();
-    S.scene = mod.createScene(el, {
-      svgText, view: S.view, markers: markers(), areaNames: areaNames(),
+    S.scene = mod.createPlan(el, {
+      svgText, markers: markers(), areaNames: areaNames(),
       places: S.places.map((p) => ({ id: p.place_id, layer: p.layer, x: Number(p.x), y: Number(p.y) })),
       onPick: (id) => select(id, true),
+      onHover: (id) => document.querySelectorAll('.rank').forEach((b) => b.classList.toggle('is-hover', b.dataset.id === id)),
       callout: (id) => { const p = S.byId.get(id); return { title: p.name, sub: describe(p) }; }
     });
     applyVisibility();
@@ -273,12 +267,15 @@
       const b = band(n?.laeq);
       if (n) rank += 1;
       const li = h('li', { 'data-id': p.place_id, style: animate ? '' : `--delay:${700 + i * 45}ms` },
-        h('button', { type: 'button', class: 'rank' + (S.selected === p.place_id ? ' is-selected' : ''), 'data-id': p.place_id, onclick: () => select(p.place_id) },
+        h('button', {
+          type: 'button', class: 'rank' + (S.selected === p.place_id ? ' is-selected' : ''), 'data-id': p.place_id, onclick: () => select(p.place_id),
+          onmouseenter: () => S.scene && S.scene.hover(p.place_id), onmouseleave: () => S.scene && S.scene.hover(null)
+        },
           h('span', { class: 'rank-no' }, n ? rank : '–'),
-          h('span', {}, h('span', { class: 'rank-name' }, p.name),
-            h('span', { class: 'rank-meta' }, [areaName(p), o && o.people ? `${o.people} ${o.people === '1' ? 'person' : 'people'}` : ''].filter(Boolean).join(' · '))),
-          h('span', { class: 'rank-value' }, h('span', { class: 'rank-db' }, n ? n.laeq.toFixed(1) : '—', n ? h('small', {}, ' dBA') : ''),
-            h('span', { class: 'band ' + (b ? b.key : '') }, b ? b.label : 'not measured'))));
+          h('span', { class: 'rank-text' }, h('span', { class: 'rank-name' }, p.name),
+            h('span', { class: 'rank-meta' }, [b ? b.label : 'not measured yet', o && o.people ? `${o.people} ${o.people === '1' ? 'person' : 'people'}` : ''].filter(Boolean).join(' · '))),
+          meter(p, n, b),
+          h('span', { class: 'rank-db' }, n ? n.laeq.toFixed(1) : '—')));
       if (animate) li.style.animation = 'none';
       return li;
     }));
@@ -291,6 +288,19 @@
         li.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }], { duration: 380, easing: 'cubic-bezier(.22,.8,.24,1)' });
       });
     }
+  }
+
+  // Noise meter: 40–75 dBA track, grey line = range over all rounds, dot = shown value.
+  function meter(p, n, b) {
+    const pos = (v) => `${Math.max(0, Math.min(100, ((v - 40) / 35) * 100)).toFixed(1)}%`;
+    const all = S.noise.filter((x) => x.place_id === p.place_id && x.laeq != null).map((x) => x.laeq);
+    const kids = [];
+    if (all.length > 1) {
+      const lo = Math.min(...all), hi = Math.max(...all);
+      kids.push(h('i', { class: 'm-range', style: `left:${pos(lo)};width:calc(${pos(hi)} - ${pos(lo)})` }));
+    }
+    if (n) kids.push(h('i', { class: 'm-dot', style: `left:${pos(n.laeq)};--c:var(--${b.key})` }));
+    return h('span', { class: 'meter', 'aria-hidden': 'true' }, ...kids);
   }
 
   function renderVending() {
@@ -336,6 +346,17 @@
         stat('Peak (max)', n && n.lmax != null ? n.lmax.toFixed(1) : '—', n ? 'dB' : ''),
         stat('People', o && o.people ? o.people : '—', '', o && /area/i.test(o.note || '') ? 'whole area' : ''),
         p.seats_total ? stat('Seats', p.seats_total, '', p.outlets ? p.outlets + ' outlets' : '') : null));
+      const series = S.noise.filter((x) => x.place_id === p.place_id && x.laeq != null).sort((a, b) => (a.t || 0) - (b.t || 0));
+      if (series.length) {
+        const pos = (v) => `${Math.max(0, Math.min(100, ((v - 40) / 35) * 100)).toFixed(1)}%`;
+        kids.push(h('h3', { class: 'section-title' }, 'Noise by round'),
+          h('div', { class: 'by-round' }, series.map((x) => {
+            const xb = band(x.laeq);
+            return h('div', { class: 'br-row' }, h('span', { class: 'br-round' }, x.round, h('small', {}, fmtTime(x.t))),
+              h('span', { class: 'meter' }, h('i', { class: 'm-dot', style: `left:${pos(x.laeq)};--c:var(--${xb.key})` })),
+              h('span', { class: 'rank-db' }, x.laeq.toFixed(1)));
+          }), h('div', { class: 'br-axis' }, h('span', {}), h('span', { class: 'ticks' }, ...[40, 50, 60, 70].map((v) => h('i', { style: `left:${pos(v)}` }, v))), h('span', {}, 'dBA'))));
+      }
     } else if (p.layer === 'water') {
       kids.push(h('div', { class: 'stats' },
         stat('Counter', st.counter ? Number(st.counter).toLocaleString('en-US') : '—', '', 'bottles saved'),
@@ -496,13 +517,30 @@
     const times = [...S.noise, ...S.obs].map((r) => r.t).filter(Boolean).sort((a, b) => a - b);
     const quiet = [...measured].sort((a, b) => a.laeq - b.laeq)[0];
     const loud = [...measured].sort((a, b) => b.laeq - a.laeq)[0];
+    const counters = S.obs.filter((o) => num(o.counter) != null);
     const facts = [
-      [S.places.length, 'places logged on the 1st floor'],
-      [measured.length, 'noise measurements (NIOSH SLM reports)'],
-      [S.rounds.length, `collection round${S.rounds.length === 1 ? '' : 's'}` + (times.length ? `, ${fmtTime(times[0])} – ${fmtTime(times[times.length - 1])}` : '')],
-      quiet && loud ? [`${(loud.laeq - quiet.laeq).toFixed(1)} dB`, `between the quietest (${S.byId.get(quiet.place_id).name}) and loudest (${S.byId.get(loud.place_id).name}) spot`] : null
-    ].filter(Boolean);
-    if ($('facts')) $('facts').replaceChildren(...facts.map(([v, l]) => h('div', { class: 'fact' }, h('span', { class: 'fact-value' }, v), h('span', { class: 'fact-label' }, l))));
+      [S.places.length, 'places mapped'],
+      [measured.length, 'noise readings'],
+      [counters.length, 'filler counter reads'],
+      [S.rounds.length, 'collection rounds']
+    ];
+    // Biggest change between the first and last reading of one place.
+    let swing = null;
+    new Set(measured.map((n) => n.place_id)).forEach((id) => {
+      const rows = measured.filter((n) => n.place_id === id && n.t).sort((a, b) => a.t - b.t);
+      if (rows.length < 2) return;
+      const a = rows[0], b = rows[rows.length - 1];
+      if (!swing || Math.abs(b.laeq - a.laeq) > Math.abs(swing.b.laeq - swing.a.laeq)) swing = { id, a, b };
+    });
+    const nm = (id) => h('b', {}, S.byId.get(id).name);
+    const story = quiet && loud
+      ? h('p', { class: 'fact-story' }, 'Our readings run from ', h('b', {}, quiet.laeq.toFixed(1) + ' dBA'), ' (', nm(quiet.place_id), `, ${quiet.round}) to `,
+        h('b', {}, loud.laeq.toFixed(1) + ' dBA'), ' (', nm(loud.place_id), `, ${loud.round}). Every +10 dB sounds about twice as loud.`,
+        swing ? ` Biggest change: ${S.byId.get(swing.id).name} went from ${swing.a.laeq.toFixed(1)} to ${swing.b.laeq.toFixed(1)} dBA between ${swing.a.round} and ${swing.b.round}.` : '')
+      : null;
+    if ($('facts')) $('facts').replaceChildren(
+      h('div', { class: 'fact-row' }, ...facts.map(([v, l]) => h('div', { class: 'fact' }, h('span', { class: 'fact-value' }, v), h('span', { class: 'fact-label' }, l)))),
+      story);
   }
 
   /* ---------------- lightbox ---------------- */
@@ -589,7 +627,7 @@
       renderChips();
       renderRounds();
       await installMap(svgText);
-      bindView();
+      renderFacts();
       bindGlobalSearch();
       setTab('quiet');
       S.firstPaint = false;
