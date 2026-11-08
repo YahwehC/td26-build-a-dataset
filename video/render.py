@@ -19,8 +19,11 @@ def main():
         b = pw.chromium.launch()
         pg = b.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
         pg.goto(URL)
+        pg.on("pageerror", lambda e: print("PAGE ERROR:", e))
         info = pg.evaluate("window.FILM.ready")
         total = info["total"]
+        # morph / landing / click times, used by music.py for the whooshes and pops
+        (OUT / "beats.json").write_text(json.dumps(pg.evaluate("window.FILM.beats"), indent=1), encoding="utf-8")
         if args and args[0] == "--stills":
             for s in args[1:]:
                 pg.evaluate(f"renderAt({float(s)})")

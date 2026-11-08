@@ -140,8 +140,14 @@ python tools/check_data.py    # validation; exit code 1 on errors
 ## Demo video
 
 `video/` builds the ~2-minute demo film from code: `voice.py` (voiceover with Microsoft Edge neural TTS via
-[edge-tts](https://github.com/rany2/edge-tts), writes the cue sheet `out/cues.json`), `music.py` (a synthesised music
-bed ducked under the voice), `capture.py` (screenshots of the running app), `index.html` (the picture: every frame is
-`renderAt(t)`, reading our CSVs for every number shown) and `render.py` (headless Chromium + ffmpeg).
-The visual style follows style 07 "Sticker Explainer" of [mg-styles-15](https://github.com/Vincentwei1021/mg-styles-15)
-(MIT): photo stickers with thick white outlines, flat icons and exact charts on one big canvas with one continuous camera.
+[edge-tts](https://github.com/rany2/edge-tts), writes the cue sheet `out/cues.json`), `capture.py` (screenshots of the
+running app), `index.html` (the picture: every frame is `renderAt(t)`, reading our CSVs for every number shown),
+`render.py` (headless Chromium + ffmpeg; also writes the morph times to `out/beats.json`) and `music.py` (a synthesised
+music bed ducked under the voice, with a whoosh and a pop on every morph). Order: voice, capture, `render.py --stills 0`,
+music, render.
+The visual style follows style 06 "Shape Morph" (demo 08-morph) of [mg-styles-15](https://github.com/Vincentwei1021/mg-styles-15)
+(MIT): one hero shape morphs from icon to icon through a circle (rotation, squash and stretch, sub-parts that collapse
+and regrow), with a colour field blooming out of it on every beat; the app screenshots appear inside the morphing
+screen shape. The hero also becomes our traced floor plan (tilted into 2.5D, rooms rising as blocks), on which the walk
+route, every surveyed place and the quietest and loudest readings are shown at their real positions. Its morph helpers (cubic-bezier solver, path sampling, vertex alignment, squash matrix, OKLab mixing) are
+adapted from that demo.
