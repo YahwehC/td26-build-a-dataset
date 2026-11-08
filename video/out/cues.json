@@ -1,0 +1,117 @@
+{
+ "total": 110.778,
+ "cues": [
+  {
+   "id": "hook1",
+   "text": "The Memorial Student Center is the busiest building at Texas A&M.",
+   "start": 0.6,
+   "end": 4.728,
+   "file": "vo-hook1.mp3"
+  },
+  {
+   "id": "hook2",
+   "text": "So where can you actually study in peace, right now? Nobody had measured it. So we did.",
+   "start": 5.078,
+   "end": 10.286,
+   "file": "vo-hook2.mp3"
+  },
+  {
+   "id": "walk",
+   "text": "On Saturday, we walked the first floor of the MSC in two rounds: once in the afternoon, and again in the evening.",
+   "start": 10.636,
+   "end": 17.74,
+   "file": "vo-walk.mp3"
+  },
+  {
+   "id": "noise",
+   "text": "At every study spot, we recorded twenty seconds of sound with the NIOSH Sound Level Meter app, which saves the average level, L-A-eq, as a PDF report.",
+   "start": 18.09,
+   "end": 28.098,
+   "file": "vo-noise.mp3"
+  },
+  {
+   "id": "water",
+   "text": "We read the bottles-saved counter on all four water fillers,",
+   "start": 28.448,
+   "end": 32.096,
+   "file": "vo-water.mp3"
+  },
+  {
+   "id": "vend",
+   "text": "photographed every vending machine and typed up its products, and checked the microwaves and printers.",
+   "start": 32.446,
+   "end": 37.894,
+   "file": "vo-vend.mp3"
+  },
+  {
+   "id": "data",
+   "text": "That is a small dataset, but every number in it is real: twenty-five places on the map, nineteen noise readings, seven counter reads, thirty-six vending products.",
+   "start": 38.244,
+   "end": 48.42,
+   "file": "vo-data.mp3"
+  },
+  {
+   "id": "source",
+   "text": "Each value links back to its source, a PDF report or a photo. Nothing is simulated.",
+   "start": 48.77,
+   "end": 54.53,
+   "file": "vo-source.mp3"
+  },
+  {
+   "id": "find1",
+   "text": "The quietest reading was the Flag Room's bottom-right corner, at forty-three and a half decibels.",
+   "start": 54.88,
+   "end": 60.616,
+   "file": "vo-find1.mp3"
+  },
+  {
+   "id": "find2",
+   "text": "The loudest was the Aggie Stop study spot: seventy decibels on Saturday afternoon. By the evening, the same spot had dropped to forty-seven.",
+   "start": 60.966,
+   "end": 69.294,
+   "file": "vo-find2.mp3"
+  },
+  {
+   "id": "find3",
+   "text": "Every ten decibels sounds about twice as loud. So when you go matters as much as where.",
+   "start": 69.644,
+   "end": 74.708,
+   "file": "vo-find3.mp3"
+  },
+  {
+   "id": "find4",
+   "text": "And the water fillers? Three of them filled just eight bottles in four hours. A quiet Saturday.",
+   "start": 75.058,
+   "end": 80.842,
+   "file": "vo-find4.mp3"
+  },
+  {
+   "id": "app1",
+   "text": "We turned it all into the MSC Study Guide: everything you need to study, on one map. Every study spot shows its noise level, next to the nearest water, restrooms and food, on a 3D plan of the floor.",
+   "start": 81.192,
+   "end": 94.32,
+   "file": "vo-app1.mp3"
+  },
+  {
+   "id": "app2",
+   "text": "Switch rounds to watch the floor change. Click a spot to see every measurement and its source.",
+   "start": 94.67,
+   "end": 100.07,
+   "file": "vo-app2.mp3"
+  },
+  {
+   "id": "app3",
+   "text": "Or open a vending machine in 3D and check what it sells.",
+   "start": 100.42,
+   "end": 103.78,
+   "file": "vo-app3.mp3"
+  },
+  {
+   "id": "end",
+   "text": "Aggie Map tells you where things are. We tell you which one to pick, right now.",
+   "start": 104.13,
+   "end": 108.378,
+   "file": "vo-end.mp3"
+  }
+ ]
+}

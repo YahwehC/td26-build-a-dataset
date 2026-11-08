@@ -16,3 +16,7 @@ data/raw/photos/**/*.jpeg
 data/raw/photos/**/*.png
 data/raw/photos/**/*.heic
 data/raw/photos/**/*.webp
+
+# demo film build output (regenerate with video/voice.py, music.py, render.py)
+video/out/*
+!video/out/cues.json

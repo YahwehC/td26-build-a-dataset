@@ -1,0 +1,73 @@
+{
+  "voice": "en-US-AndrewNeural",
+  "rate": "+4%",
+  "gap": 0.35,
+  "lead_in": 0.6,
+  "tail": 2.4,
+  "lines": [
+    {
+      "id": "hook1",
+      "text": "The Memorial Student Center is the busiest building at Texas A&M."
+    },
+    {
+      "id": "hook2",
+      "text": "So where can you actually study in peace, right now? Nobody had measured it. So we did."
+    },
+    {
+      "id": "walk",
+      "text": "On Saturday, we walked the first floor of the MSC in two rounds: once in the afternoon, and again in the evening."
+    },
+    {
+      "id": "noise",
+      "text": "At every study spot, we recorded twenty seconds of sound with the NIOSH Sound Level Meter app, which saves the average level, L-A-eq, as a PDF report."
+    },
+    {
+      "id": "water",
+      "text": "We read the bottles-saved counter on all four water fillers,"
+    },
+    {
+      "id": "vend",
+      "text": "photographed every vending machine and typed up its products, and checked the microwaves and printers."
+    },
+    {
+      "id": "data",
+      "text": "That is a small dataset, but every number in it is real: twenty-five places on the map, nineteen noise readings, seven counter reads, thirty-six vending products."
+    },
+    {
+      "id": "source",
+      "text": "Each value links back to its source, a PDF report or a photo. Nothing is simulated."
+    },
+    {
+      "id": "find1",
+      "text": "The quietest reading was the Flag Room's bottom-right corner, at forty-three and a half decibels."
+    },
+    {
+      "id": "find2",
+      "text": "The loudest was the Aggie Stop study spot: seventy decibels on Saturday afternoon. By the evening, the same spot had dropped to forty-seven."
+    },
+    {
+      "id": "find3",
+      "text": "Every ten decibels sounds about twice as loud. So when you go matters as much as where."
+    },
+    {
+      "id": "find4",
+      "text": "And the water fillers? Three of them filled just eight bottles in four hours. A quiet Saturday."
+    },
+    {
+      "id": "app1",
+      "text": "We turned it all into the MSC Study Guide: everything you need to study, on one map. Every study spot shows its noise level, next to the nearest water, restrooms and food, on a 3D plan of the floor."
+    },
+    {
+      "id": "app2",
+      "text": "Switch rounds to watch the floor change. Click a spot to see every measurement and its source."
+    },
+    {
+      "id": "app3",
+      "text": "Or open a vending machine in 3D and check what it sells."
+    },
+    {
+      "id": "end",
+      "text": "Aggie Map tells you where things are. We tell you which one to pick, right now."
+    }
+  ]
+}
