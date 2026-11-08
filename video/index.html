@@ -335,6 +335,45 @@ window.renderAt = (t) => {
   if (subs.textContent !== txt) subs.textContent = txt;
 };
 window.FILM = { ready: build().then(() => { window.renderAt(0); return { total: TOTAL }; }) };
+
+// Preview player (index.html?play): plays the voice + music and draws renderAt(audio time), scaled to the window.
+if (new URLSearchParams(location.search).has('play')) {
+  const fit = () => { const s = Math.min(innerWidth / 1920, (innerHeight - 56) / 1080); document.getElementById('frame').style.cssText = `position:absolute;inset:auto;width:1920px;height:1080px;left:${(innerWidth - 1920 * s) / 2}px;top:${(innerHeight - 56 - 1080 * s) / 2}px;transform:scale(${s});transform-origin:0 0`; };
+  document.documentElement.style.cssText = 'width:auto;height:auto;background:#111';
+  document.body.style.cssText = 'width:auto;height:100vh;background:#111';
+  addEventListener('resize', fit); fit();
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:56px;display:flex;gap:14px;align-items:center;padding:0 16px;background:#1b1f24;color:#fff;font:600 15px Geist,sans-serif;z-index:9';
+  bar.innerHTML = '<button id="pp" style="font:inherit;padding:8px 18px;border-radius:99px;border:0;background:#ff5a36;color:#fff;cursor:pointer">Play</button><input id="sk" type="range" min="0" max="1000" value="0" style="flex:1"><span id="tm">0:00</span>';
+  document.body.appendChild(bar);
+  // Web Audio (python's http.server has no Range support, so <audio> cannot seek)
+  const ac = new AudioContext();
+  const load = (u) => fetch(u).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b));
+  const pp = bar.querySelector('#pp'), sk = bar.querySelector('#sk'), tm = bar.querySelector('#tm');
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  Promise.all([window.FILM.ready, load('out/voice.wav'), load('out/music.wav')]).then(([{ total }, vb, mb]) => {
+    let playing = false, offset = 0, startAt = 0, srcs = [];
+    const now = () => (playing ? Math.min(total, offset + ac.currentTime - startAt) : offset);
+    const stop = () => { srcs.forEach((x) => { try { x.stop(); } catch (e) {} }); srcs = []; };
+    const play = () => {
+      stop(); ac.resume();
+      srcs = [vb, mb].map((b) => { const x = ac.createBufferSource(); x.buffer = b; x.connect(ac.destination); x.start(0, offset); return x; });
+      startAt = ac.currentTime; playing = true; pp.textContent = 'Pause';
+    };
+    const pause = () => { offset = now(); stop(); playing = false; pp.textContent = 'Play'; };
+    pp.onclick = () => (playing ? pause() : play());
+    sk.oninput = () => { offset = (sk.value / 1000) * total; if (playing) play(); };
+    const loop = () => {
+      const t = now();
+      if (playing && t >= total) pause();
+      window.renderAt(t);
+      sk.value = Math.round((t / total) * 1000);
+      tm.textContent = `${fmt(t)} / ${fmt(total)}`;
+      requestAnimationFrame(loop);
+    };
+    loop();
+  });
+}
 })();
 </script>
 </body>
