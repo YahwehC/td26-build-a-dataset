@@ -21,3 +21,6 @@ V-3,vending,Vending machine 3,16,742,1120,row of 4 machines south of area 16,,,
 V-4,vending,Vending machine 4,16,768,1120,row of 4 machines south of area 16,,,
 M-1,microwave,Microwaves (4),14,966,1042,west part of area 14,,,disposable utensils and napkins next to the microwaves
 P-1,printer,Printers (3),16,782,1045,next to area 16,,,
+R-1,restroom,Restrooms north of the Flag Room,9,1378,512,"next to water filler 1, north of the Flag Room",,,location from the restroom symbol on the MSC directory sign; not inspected by us
+R-2,restroom,Restrooms north of area 14,14,1114,942,"next to water filler 2, north side of area 14",,,location from the restroom symbol on the MSC directory sign; not inspected by us
+R-3,restroom,Restrooms west of area 15,15,638,1022,"next to water filler 3, west of area 15",,,location from the restroom symbol on the MSC directory sign; not inspected by us

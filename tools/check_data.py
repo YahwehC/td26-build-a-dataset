@@ -48,7 +48,7 @@ EXPECTED_HEADERS = {
     ],
 }
 
-LAYERS = {'study', 'water', 'vending', 'microwave', 'printer'}
+LAYERS = {'study', 'water', 'vending', 'microwave', 'printer', 'restroom'}
 COVERAGE_LAYERS = {'study', 'water', 'vending', 'microwave'}
 ALLOWED_DATES = {'2026-11-07', '2026-11-08'}
 

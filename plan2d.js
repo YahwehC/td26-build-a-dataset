@@ -10,7 +10,8 @@ const ICONS = {
   water: '<path d="M12 3.6c3.1 3.7 5.6 6.7 5.6 9.7a5.6 5.6 0 0 1-11.2 0c0-3 2.5-6 5.6-9.7z"/>',
   vending: '<rect x="6" y="3.5" width="12" height="17" rx="1.6"/><path d="M8.8 7.5h4.2M8.8 10.5h4.2M8.8 13.5h4.2M15.4 7.2v6.6M9 17.4h6"/>',
   microwave: '<rect x="3.5" y="6" width="17" height="12" rx="1.6"/><rect x="6" y="8.6" width="8.6" height="6.8" rx="1"/><path d="M17.4 9.2v.1M17.4 12v.1M17.4 14.8v.1"/>',
-  printer: '<path d="M7.2 9V4.2h9.6V9"/><rect x="4" y="9" width="16" height="7.4" rx="1.6"/><path d="M7.2 13.6h9.6v6.2H7.2z"/>'
+  printer: '<path d="M7.2 9V4.2h9.6V9"/><rect x="4" y="9" width="16" height="7.4" rx="1.6"/><path d="M7.2 13.6h9.6v6.2H7.2z"/>',
+  restroom: '<circle cx="8" cy="5" r="1.7"/><path d="M6 8.6h4l.6 6H9.4V20H6.6v-5.4H5.4z"/><circle cx="16" cy="5" r="1.7"/><path d="M16 8.4l3 7.2h-1.8V20h-2.4v-4.4H13z"/><path d="M12 3.5v17"/>'
 };
 
 function el(tag, attrs = {}, parent) {
@@ -82,9 +83,6 @@ export function createPlan(container, spec) {
   });
   doc.querySelectorAll('.icon.elevator rect').forEach((r) => {
     el('rect', { x: r.getAttribute('x'), y: r.getAttribute('y'), width: r.getAttribute('width'), height: r.getAttribute('height'), rx: 4, class: 'elevator' }, iconsG);
-  });
-  doc.querySelectorAll('.icon.restroom circle').forEach((c) => {
-    el('circle', { cx: c.getAttribute('cx'), cy: c.getAttribute('cy'), r: 9, class: 'restroom' }, iconsG);
   });
   doc.querySelectorAll('.icon.entrance path').forEach((p) => el('path', { d: p.getAttribute('d'), class: 'entrance' }, iconsG));
 

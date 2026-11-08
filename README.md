@@ -1,9 +1,11 @@
-# MSC Field Map
+# MSC Study Guide
 
-An interactive map of the Memorial Student Center (MSC) 1st floor at Texas A&M, built for the TAMU Datathon 2026
+An interactive study guide map of the Memorial Student Center (MSC) 1st floor at Texas A&M: everything that helps
+you study in one place (quiet spots, water, restrooms, food and printing). Built for the TAMU Datathon 2026
 **Build-A-Dataset** challenge. Every value on the map was measured by our team in person during the event
 (Nov 7–8, 2026): how loud each study place is, how many people are there, and where the water fillers,
-vending machines, microwaves and printers are, with their condition.
+vending machines, microwaves and printers are, with their condition. Restroom locations come from the MSC directory
+sign (we did not inspect restrooms).
 
 The official Aggie Map shows which buildings have amenities. It has no indoor floor plan, no water fillers or
 study places, and nothing that changes over time. Our map answers "where should I go right now?" with our own measurements.
@@ -55,8 +57,8 @@ Then open http://localhost:8000. The app is static (HTML/CSS/JS; Three.js from j
 ### `data/places.csv`
 | Field | Meaning |
 |---|---|
-| `place_id` | Our ID. `S-` study place, `W-` water filler, `V-` vending, `M-` microwave, `P-` printer |
-| `layer` | `study`, `water`, `vending`, `microwave`, `printer` |
+| `place_id` | Our ID. `S-` study place, `W-` water filler, `V-` vending, `M-` microwave, `P-` printer, `R-` restroom (location from the MSC directory sign) |
+| `layer` | `study`, `water`, `vending`, `microwave`, `printer`, `restroom` |
 | `name` | Short human name |
 | `area` | Area number on the MSC directory sign (e.g. 9 = Flag Room) |
 | `x`, `y` | Position in the plan's coordinate frame (pixels of the sign photo, 2000×1379) |

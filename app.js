@@ -1,4 +1,4 @@
-/* MSC Field Map: app logic. Loads our CSVs, draws the 2D floor plan with value pins (plan2d.js),
+/* MSC Study Guide: app logic. Loads our CSVs, draws the 2D floor plan with value pins (plan2d.js),
  * and drives the ranking, vending search, details, photo lightbox and 3D viewer (model3d.js). */
 (() => {
   'use strict';
@@ -10,7 +10,8 @@
     { key: 'water', label: 'Water fillers', one: 'Water filler', color: 'var(--water)', letter: 'W' },
     { key: 'vending', label: 'Vending', one: 'Vending machine', color: 'var(--vending)', letter: 'V' },
     { key: 'microwave', label: 'Microwaves', one: 'Microwaves', color: 'var(--microwave)', letter: 'M' },
-    { key: 'printer', label: 'Printers', one: 'Printers', color: 'var(--printer)', letter: 'P' }
+    { key: 'printer', label: 'Printers', one: 'Printers', color: 'var(--printer)', letter: 'P' },
+    { key: 'restroom', label: 'Restrooms', one: 'Restrooms', color: 'var(--restroom)', letter: 'WC' }
   ];
   const LAYER = Object.fromEntries(LAYERS.map((l) => [l.key, l]));
   const BANDS = [
@@ -213,6 +214,7 @@
       const b = band(n.laeq);
       return `${n.laeq.toFixed(1)} dBA · ${b.label}${o && o.people ? ' · ' + o.people + (o.people === '1' ? ' person' : ' people') : ''}`;
     }
+    if (p.layer === 'restroom') return 'Location from the MSC directory sign';
     const st = stateFor(p.place_id);
     if (p.layer === 'vending') { const it = itemsFor(p.place_id); return it.length ? `${it.length} products logged` : 'Products not logged yet'; }
     if (p.layer === 'water') return st.counter ? `Counter ${Number(st.counter).toLocaleString('en-US')}` : 'Not measured yet';
@@ -336,7 +338,7 @@
       h('span', { class: 'd-layer', style: `--chip-color:${L.color}` }, h('i', {}), L.one),
       h('h2', { class: 'd-title' }, p.name),
       h('p', { class: 'd-sub' }, [areaName(p), p.location_note].filter(Boolean).join(' · ')))];
-    if (p.note) kids.push(h('p', { class: 'note-box' }, p.note));
+    if (p.note && p.layer !== 'restroom') kids.push(h('p', { class: 'note-box' }, p.note));
 
     const st = stateFor(p.place_id);
     if (p.layer === 'study') {
@@ -370,6 +372,10 @@
       kids.push(h('div', { class: 'stats' },
         stat('Products', it.length || '—'), stat('Sold out', it.length ? it.filter((i) => i.sold_out === 'y').length : '—'),
         stat('Cheapest', avail[0] ? money(avail[0].price) : '—', '', avail[0] ? avail[0].product : '')));
+    } else if (p.layer === 'restroom') {
+      kids.push(h('p', { class: 'note-box' }, 'Mapped from the restroom symbols on the MSC directory sign, so you can find the nearest one from any study spot. We did not inspect restrooms (no photos, no counts).'));
+      box.replaceChildren(...kids);
+      return;
     } else {
       kids.push(h('div', { class: 'stats' },
         stat('Units', st.units || '—'), stat('Working', st.units_working || '—', st.units ? `/ ${st.units}` : ''),
@@ -377,7 +383,7 @@
         p.layer === 'microwave' ? stat('Waiting', st.waiting || '—') : null));
     }
 
-    if (p.layer !== 'study') {
+    if (p.layer !== 'study' && p.layer !== 'restroom') {
       kids.push(h('button', { type: 'button', class: 'btn', onclick: () => open3d(p) },
         cubeIcon(), 'View in 3D'));
     }

@@ -29,6 +29,7 @@
   --vending: #7c5cff;
   --microwave: #db4b93;
   --printer: #64748b;
+  --restroom: #0f9488;
 
   --shadow-pin: 0 1px 2px rgba(28, 25, 23, .18), 0 4px 12px rgba(28, 25, 23, .12);
   --shadow-pop: 0 2px 6px rgba(28, 25, 23, .12), 0 12px 32px rgba(28, 25, 23, .16);
@@ -152,18 +153,18 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .compact .pin-study { height: 22px; padding: 0 7px 0 6px; gap: 4px; font-size: 12px; }
 .compact .pin-study small { display: none; }
 .compact .pin-study i { width: 7px; height: 7px; }
-.compact .pin-water, .compact .pin-vending, .compact .pin-microwave, .compact .pin-printer { width: 24px; height: 24px; }
+.compact .pin-water, .compact .pin-vending, .compact .pin-microwave, .compact .pin-printer, .compact .pin-restroom { width: 24px; height: 24px; }
 .compact .pin svg { width: 14px; height: 14px; }
 .pin.bump > * { animation: bump .45s cubic-bezier(.3, 1.6, .5, 1); }
 @keyframes bump { 40% { transform: scale(1.18); } }
 
 /* amenity pins: round icon badges */
-.pin-water, .pin-vending, .pin-microwave, .pin-printer { width: 30px; height: 30px; justify-content: center; border-radius: 50%; background: var(--panel); box-shadow: var(--shadow-pin); color: var(--c); transition: background .15s, color .15s, box-shadow .15s; }
+.pin-water, .pin-vending, .pin-microwave, .pin-printer, .pin-restroom { width: 30px; height: 30px; justify-content: center; border-radius: 50%; background: var(--panel); box-shadow: var(--shadow-pin); color: var(--c); transition: background .15s, color .15s, box-shadow .15s; }
 .pin svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .pin-water svg { fill: color-mix(in srgb, var(--c) 18%, transparent); }
 .pin em { position: absolute; top: -7px; right: -11px; font: 600 10.5px/1 var(--mono); font-style: normal; background: var(--ink); color: #fff; border-radius: 99px; padding: 3px 5px; }
 .pin em:empty { display: none; }
-.pin-water:hover, .pin-vending:hover, .pin-microwave:hover, .pin-printer:hover, .pin.is-hover:not(.pin-study) { box-shadow: 0 0 0 1.5px var(--c), var(--shadow-pop); }
+.pin-water:hover, .pin-vending:hover, .pin-microwave:hover, .pin-printer:hover, .pin-restroom:hover, .pin.is-hover:not(.pin-study) { box-shadow: 0 0 0 1.5px var(--c), var(--shadow-pop); }
 .pin.is-selected:not(.pin-study), .pin.has-selected:not(.pin-study) { background: var(--c); color: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 25%, transparent), var(--shadow-pop); }
 
 .plan-tip { position: absolute; left: 0; top: 0; z-index: 10; pointer-events: none; transform-origin: 50% 100%; }
