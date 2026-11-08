@@ -10,3 +10,11 @@ N008,S-AS,R0,2026-11-07T14:06:49,20,70.3,75.9,88.2,iPhone (collector 1),NIOSH SL
 N009,S-A8-L,R0,2026-11-07T14:08:11,20,49.9,56.0,76.0,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 14-08-11.pdf,
 N010,S-A8-R,R0,2026-11-07T14:09:07,20,52.2,61.4,75.5,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 14-09-07.pdf,area 8 had 19 people
 N011,S-A5,R0,2026-11-07T14:10:54,21,44.7,62.3,72.7,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 14-10-54.pdf,1 person
+N012,S-FR-BL,R1,2026-11-07T18:03:54,10,46.9,54.6,72.2,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 18-03-54.pdf,
+N013,S-FR-BR,R1,2026-11-07T18:04:25,10,43.5,46.6,67.6,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 18-04-25.pdf,no one playing the piano
+N014,S-FR-TR,R1,2026-11-07T18:05:03,10,44.2,46.1,69.1,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 18-05-03.pdf,
+N015,S-A8-R,R1,2026-11-07T18:06:30,11,54.3,62.2,76.1,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 18-06-30.pdf,
+N016,S-A8-L,R1,2026-11-07T18:07:16,11,45.5,53.0,74.9,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 18-07-16.pdf,
+N017,S-HR-R,R1,2026-11-07T18:08:36,15,50.4,60.4,75.8,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 18-08-36.pdf,
+N018,S-HR-L,R1,2026-11-07T18:09:16,13,44.5,56.9,73.4,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 18-09-16.pdf,
+N019,S-AS,R1,2026-11-07T18:11:55,20,47.1,63.4,79.5,iPhone (collector 1),NIOSH SLM,data/raw/noise/Report 2026-11-07 18-11-55.pdf,"sent as ""ten-something area""; confirmed by the collector as Aggie Stop"
