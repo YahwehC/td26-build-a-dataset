@@ -1,34 +1,34 @@
 /* MSC Field Map. Minimal: full-bleed map + one sidebar, hairline dividers, no cards, no shadows.
    Colour is reserved for data (noise bands, amenity types); the accent marks selection only. */
 :root {
-  --bg: #fffaf1;
-  --ink: #2a1f1d;
-  --muted: #7d6b62;
-  --faint: #b9a89c;
-  --line: #f0e3cf;
-  --hover: #fff1dc;
+  --bg: #ffffff;
+  --ink: #111111;
+  --muted: #6e6e73;
+  --faint: #a1a1a6;
+  --line: #e8e8ea;
+  --hover: #f5f5f6;
   --accent: #500000;          /* Aggie maroon */
-  --map-bg: radial-gradient(120% 90% at 50% 0%, #fff6e6 0%, #ffe6c4 55%, #ffd2b0 100%);
+  --map-bg: linear-gradient(180deg, #f7f7f5 0%, #ececea 100%);
+  --label: #8e8e93;
 
-  --quiet: #3cc37c;
-  --moderate: #ffc93c;
-  --loud: #ff8a3d;
-  --vloud: #ff4f5e;
-  --unmeasured: #bdb3aa;
-  --water: #4d96ff;
-  --vending: #8f6bff;
-  --microwave: #ff6b6b;
-  --printer: #5e5468;
+  --quiet: #1f9d68;
+  --moderate: #e9a917;
+  --loud: #ee7433;
+  --vloud: #df4349;
+  --unmeasured: #b0b0b6;
+  --water: #2f7fe0;
+  --vending: #6a4ce6;
+  --microwave: #f0603f;
+  --printer: #55555c;
 
   --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --toon: "Fredoka", "Inter", system-ui, sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1826; --ink: #f6ece2; --muted: #b3a6b8; --faint: #7a6f82; --line: #2f2840; --hover: #262036; --accent: #ff9fb0;
-    --map-bg: radial-gradient(120% 90% at 50% 0%, #3a2f5c 0%, #241d3a 60%, #18142a 100%);
-    --unmeasured: #8a8090; --printer: #a99fb5;
+    --bg: #111113; --ink: #ededef; --muted: #9a9aa2; --faint: #6b6b72; --line: #26262a; --hover: #1b1b1e; --accent: #e89aa8;
+    --map-bg: linear-gradient(180deg, #1b1b1e 0%, #121214 100%); --label: #85858c;
+    --unmeasured: #5f5f66; --printer: #8a8a92;
     color-scheme: dark;
   }
 }
@@ -55,7 +55,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 
 /* ---------- sidebar head ---------- */
-.head h1 { margin: 0; font: 600 22px/1.1 var(--toon); letter-spacing: 0; }
+.head h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
 .meta { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
 
 .search { position: relative; display: block; }
@@ -156,16 +156,17 @@ td.n { font-variant-numeric: tabular-nums; }
 .foot { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .foot p { margin: 4px 0 0; }
 
-/* ---------- 3D cartoon scene ---------- */
+/* ---------- 3D scene ---------- */
 .scene-canvas { position: absolute; inset: 0; display: block; touch-action: none; }
 .scene-labels { position: absolute; inset: 0; pointer-events: none; }
-.scene-labels > div { opacity: 0; transition: opacity .5s ease-out; }
+.scene-labels > div { opacity: 0; transition: opacity .6s ease-out; }
 .labels-in .scene-labels > div { opacity: 1; }
-.lbl-area { font: 600 11px/1 var(--toon); letter-spacing: .08em; text-transform: uppercase; color: #7a5a46; text-shadow: 0 1px 0 #fff, 0 0 3px #fff; white-space: nowrap; }
-.lbl-num { font: 600 10px/1 var(--toon); color: #a08672; }
-.pin-db { font: 700 12px/1 var(--toon); color: #2a1f1d; background: var(--c, #ccc); border: 2px solid #2a1f1d; border-radius: 999px; padding: 3px 7px 2px; box-shadow: 0 2px 0 #2a1f1d; white-space: nowrap; }
-.tip { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; max-width: 240px; background: #2a1f1d; color: #fffaf1; padding: 6px 10px; border-radius: 10px; font: 400 12.5px/1.35 var(--font); }
-.tip b { display: block; font: 600 13px/1.3 var(--toon); }
+.lbl-area { font: 500 10px/1 var(--font); letter-spacing: .14em; text-transform: uppercase; color: var(--label); white-space: nowrap; }
+.lbl-num { font: 500 9.5px/1 var(--font); color: var(--faint); }
+.pin-db { font: 600 11px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--bg); padding: 3px 6px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04); white-space: nowrap; }
+.pin-db::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--c, #ccc); margin-right: 5px; vertical-align: 1px; }
+.tip { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; max-width: 240px; background: var(--ink); color: var(--bg); padding: 6px 9px; font: 400 12.5px/1.35 var(--font); }
+.tip b { display: block; font-weight: 600; }
 .tip[hidden] { display: none; }
 
 /* ---------- modals ---------- */

@@ -1,6 +1,6 @@
-/* scene.js: the MSC 1st floor as a 3D cartoon diorama (Three.js toon shading + ink outlines).
- * Look: MeshToonMaterial + OutlineEffect (both from three.js), warm pastel palette, chunky bevelled blocks,
- * little figures for the people we counted, bouncy squash-and-stretch entrance.
+/* scene.js: the MSC 1st floor as a clean white 3D model (Three.js), like an architect's massing model.
+ * Look: matte white blocks with hairline edges, image-based studio light (RoomEnvironment), soft shadows and
+ * ambient occlusion (GTAOPass); colour only for data. People we counted stand as abstract white figures.
  *
  * createScene(container, { svgText, places, markers, view, onHover, onPick }) ->
  *   { update(markers), setVisible(layers), select(id, fly), setView(mode), dispose() }
@@ -8,25 +8,29 @@
  * markers: { [id]: { color, label, people, ripples, model: { kind, data } } } */
 import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
-import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { buildModel, toonGradient } from './model3d.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { buildModel } from './model3d.js';
 
 const K = 0.05;                 // world units per plan pixel (floor ≈ 100 units wide)
-const TILE_H = 0.3, BLOCK_H = 2.4, SERVICE_H = 1.5, BEVEL = 0.09;
+const TILE_H = 0.1, BLOCK_H = 2.2, SERVICE_H = 1.4, BEVEL = 0.04;
 const MODEL_SCALE = 1.35;       // amenity models: one uniform scale, so sizes stay comparable
-const INK = 0x2a1f1d;
 const STUDY_AREAS = [5, 8, 9, 15, 16], SHOP_AREAS = [13, 14, 17, 18, 19];
-const C = {
-  floor: 0xfff1d6, open: 0xfbe3bd, study: 0xbfe8c9, shop: 0xffc9a8, service: 0xd9d1f4, other: 0xcfe3f7,
-  shirts: [0xff6b6b, 0x4d96ff, 0xffd93d, 0x6bcb77, 0xc77dff, 0xff9f45, 0x3dc1d3],
-  skins: [0xffd7b5, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524], hair: [0x3b2a20, 0x1f1a17, 0x7a4a2a, 0xd9a35b],
-  accent: 0x500000
+const THEMES = {
+  light: { floor: 0xffffff, open: 0xf6f6f4, study: 0xedf5ef, shop: 0xf8f2ec, service: 0xf1f1ef, other: 0xfbfbfa, tile: 0xf7f7f5,
+    edge: 0xc9c9c4, figure: 0xdcdcd7, shadow: 0.22 },
+  dark: { floor: 0x2a2a2e, open: 0x26262a, study: 0x27302b, shop: 0x302c29, service: 0x2c2c30, other: 0x37373c, tile: 0x2c2c30,
+    edge: 0x45454c, figure: 0x8a8a92, shadow: 0.45 }
 };
+const ACCENT = 0x500000;
 
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const outBack = (t) => { const c1 = 1.7, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const outBack = (t) => { const c1 = 0.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 const outCubic = (t) => 1 - Math.pow(1 - t, 3);
 const hash = (s) => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
 const rnd = (seed) => () => ((seed = Math.imul(seed ^ (seed >>> 15), 2246822507) ^ Math.imul(seed ^ (seed >>> 13), 3266489909)) >>> 0) / 4294967296;
@@ -71,17 +75,18 @@ function readPlan(svgText) {
 }
 
 /* ---------- materials ---------- */
-const matCache = new Map();
-function toon(color) {
-  const key = typeof color === 'number' ? color : new THREE.Color(color).getHex();
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshToonMaterial({ color: key, gradientMap: toonGradient() }));
-  return matCache.get(key);
+// Named materials so the theme (light/dark) can recolour them in place.
+const named = new Map();
+let theme = THEMES.light;
+function mat(key) {
+  if (!named.has(key)) named.set(key, new THREE.MeshStandardMaterial({ color: theme[key], roughness: 0.92, metalness: 0, envMapIntensity: 0.5 }));
+  return named.get(key);
 }
+const solid = (color, rough = 0.55) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0 });
 function flat(color, opacity = 1) {
-  const m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
-  m.userData.outlineParameters = { visible: false };
-  return m;
+  return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
 }
+let edgeMat = null;
 
 export function createScene(container, spec) {
   const plan = readPlan(spec.svgText);
@@ -95,7 +100,7 @@ export function createScene(container, spec) {
   // A room that holds one of our places becomes a flat tile (things stand on it); empty rooms are blocks.
   plan.rooms.forEach((r) => {
     r.tile = r.group === 'open' || places.some((p) => inside([p.x, p.y], r.ring));
-    r.h = r.group === 'open' ? 0.12 : r.tile ? TILE_H : r.group === 'service' ? SERVICE_H : BLOCK_H;
+    r.h = r.group === 'open' ? 0.04 : r.tile ? TILE_H : r.group === 'service' ? SERVICE_H : BLOCK_H;
   });
   const blocks = plan.rooms.filter((r) => !r.tile);
   const baseAt = (x, y) => plan.rooms.reduce((h, r) => (r.tile && inside([x, y], r.ring) ? Math.max(h, r.h) : h), 0);
@@ -103,55 +108,76 @@ export function createScene(container, spec) {
   const onFloor = (x, y) => plan.floor.some((ring) => inside([x, y], ring));
 
   /* renderer */
+  const dark = window.matchMedia('(prefers-color-scheme: dark)');
+  theme = dark.matches ? THEMES.dark : THEMES.light;
+  named.forEach((m, k) => m.color.setHex(theme[k]));
+  edgeMat = new THREE.LineBasicMaterial({ color: theme.edge });
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(DPR);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.VSMShadowMap;
   renderer.domElement.className = 'scene-canvas';
   container.appendChild(renderer.domElement);
-  const effect = new OutlineEffect(renderer, { defaultThickness: 0.0042, defaultColor: new THREE.Color(INK).toArray(), defaultAlpha: 1 });
   const labels = new CSS2DRenderer();
   labels.domElement.className = 'scene-labels';
   container.appendChild(labels.domElement);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 1, 2000);
-  scene.add(new THREE.HemisphereLight(0xfff6e8, 0xc9b19a, 1.9));
-  const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
-  sun.position.set(-35, 70, 45);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+  const sun = new THREE.DirectionalLight(0xffffff, 2.6);
+  sun.position.set(-30, 70, 40);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 260 });
-  sun.shadow.bias = -0.0006;
-  sun.shadow.normalBias = 0.03;
+  sun.shadow.radius = 9;
+  sun.shadow.blurSamples = 16;
+  sun.shadow.bias = -0.0004;
   scene.add(sun, sun.target);
 
-  const catcher = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: 0.16 }));
-  catcher.material.userData.outlineParameters = { visible: false };
+  // Ambient occlusion makes the white blocks read without heavy outlines.
+  const composer = new EffectComposer(renderer);
+  composer.setPixelRatio(Math.min(DPR, 1.5));
+  composer.addPass(new RenderPass(scene, camera));
+  try {
+    const gtao = new GTAOPass(scene, camera, 1, 1);
+    gtao.updateGtaoMaterial({ radius: 2.2, distanceExponent: 1.5, thickness: 1.5, scale: 1.1, samples: 16 });
+    gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+    gtao.blendIntensity = 1.0;
+    composer.addPass(gtao);
+  } catch (e) { console.warn('AO off:', e.message); }
+  composer.addPass(new OutputPass());
+
+  const catcher = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: theme.shadow }));
   catcher.rotation.x = -Math.PI / 2;
-  catcher.position.y = -3;
+  catcher.position.y = -0.62;
   catcher.receiveShadow = true;
   scene.add(catcher);
 
   /* plan geometry */
-  function prism(ring, h, color) {
+  function prism(ring, h, key, edges = true) {
     const s = new THREE.Shape();
     ring.forEach(([x, y], i) => { const [wx, wz] = W(x, y); i ? s.lineTo(wx, -wz) : s.moveTo(wx, -wz); });
     const bevel = Math.min(BEVEL, h / 3);
     const geo = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.01, h - 2 * bevel), bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 2, curveSegments: 1 });
     geo.rotateX(-Math.PI / 2);
     geo.translate(0, bevel, 0);
-    const m = new THREE.Mesh(geo, toon(color));
+    const m = new THREE.Mesh(geo, mat(key));
     m.castShadow = true; m.receiveShadow = true;
+    if (edges) m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), edgeMat));
     return m;
   }
   const island = new THREE.Group();
   scene.add(island);
-  const floorMeshes = plan.floor.map((ring) => { const m = prism(ring, 1.4, C.floor); m.position.y = -1.4; island.add(m); return m; });
+  const floorMeshes = plan.floor.map((ring) => { const m = prism(ring, 0.6, 'floor'); m.position.y = -0.6; island.add(m); return m; });
   const R = Math.max(...allFloor.map(([x, y]) => Math.hypot(...W(x, y))));
   const roomMeshes = plan.rooms.map((r) => {
-    const m = prism(r.ring, r.h, C[r.group] || C.other);
+    const m = prism(r.ring, r.h, r.tile ? (['study', 'shop', 'open'].includes(r.group) ? r.group : 'tile') : (r.group === 'service' ? 'service' : 'other'), r.group !== 'open');
     const cx = r.ring.reduce((s, p) => s + p[0], 0) / r.ring.length, cy = r.ring.reduce((s, p) => s + p[1], 0) / r.ring.length;
     m.userData.intro = { delay: (r.tile ? 450 : 700) + (Math.hypot(...W(cx, cy)) / R) * 800, dur: r.tile ? 450 : 700 };
     m.scale.y = 0.001;
@@ -174,13 +200,11 @@ export function createScene(container, spec) {
   const pickables = [];
   const S = { markers: spec.markers || {}, visible: new Set(places.map((p) => p.layer)), hover: null, selected: null };
   const nodes = new Map();
-  const puckGeo = new THREE.CylinderGeometry(0.85, 0.95, 0.5, 32);
-  const ringGeo = new THREE.RingGeometry(0.92, 1.12, 48).rotateX(-Math.PI / 2);
-  const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.42, 4, 12);
-  const headGeo = new THREE.SphereGeometry(0.33, 20, 14);
-  const hairGeo = new THREE.SphereGeometry(0.345, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.42);
-  const eyeGeo = new THREE.SphereGeometry(0.045, 8, 6);
-  const eyeMat = toon(0x1f1a17);
+  const puckGeo = new THREE.CylinderGeometry(0.62, 0.62, 0.16, 48);
+  const haloGeo = new THREE.CircleGeometry(1.5, 48).rotateX(-Math.PI / 2);
+  const ringGeo = new THREE.RingGeometry(1.0, 1.06, 64).rotateX(-Math.PI / 2);
+  const bodyGeo = new THREE.CapsuleGeometry(0.2, 0.62, 4, 16);
+  const headGeo = new THREE.SphereGeometry(0.17, 20, 14);
 
   function tagPick(obj, id) { obj.traverse((o) => { o.userData.placeId = id; if (o.isMesh) pickables.push(o); }); }
 
@@ -235,23 +259,18 @@ export function createScene(container, spec) {
     }
     if (!moved) break;
   }
+  // Abstract white figures, as in an architectural model: one per person counted (max 6 per place).
   function makeFigure(seed) {
     const r = rnd(seed);
     const g = new THREE.Group();
-    const pick = (arr) => arr[Math.floor(r() * arr.length)];
-    const body = new THREE.Mesh(bodyGeo, toon(pick(C.shirts)));
+    const body = new THREE.Mesh(bodyGeo, mat('figure'));
     body.position.y = 0.52;
-    const head = new THREE.Mesh(headGeo, toon(pick(C.skins)));
-    head.position.y = 1.33;
-    const hair = new THREE.Mesh(hairGeo, toon(pick(C.hair)));
-    hair.position.y = 1.36;
-    hair.rotation.x = -0.25;
-    const e1 = new THREE.Mesh(eyeGeo, eyeMat), e2 = new THREE.Mesh(eyeGeo, eyeMat);
-    e1.position.set(-0.12, 1.35, 0.3); e2.position.set(0.12, 1.35, 0.3);
-    [body, head, hair].forEach((m) => { m.castShadow = true; });
-    g.add(body, head, hair, e1, e2);
-    g.rotation.y = (r() - 0.5) * 1.4;
-    g.userData = { phase: r() * Math.PI * 2, speed: 0.7 + r() * 0.6, delay: 0 };
+    const head = new THREE.Mesh(headGeo, mat('figure'));
+    head.position.y = 1.08;
+    body.castShadow = head.castShadow = true;
+    g.add(body, head);
+    g.rotation.y = r() * Math.PI * 2;
+    g.userData = { phase: r() * Math.PI * 2, speed: 0.5 + r() * 0.4, delay: 0 };
     return g;
   }
 
@@ -290,6 +309,7 @@ export function createScene(container, spec) {
     node.ripples.forEach((m) => node.group.remove(m));
     node.ripples = Array.from({ length: n }, (_, i) => {
       const m = new THREE.Mesh(ringGeo, flat(color, 0));
+      m.renderOrder = 2;
       m.position.y = 0.04;
       m.userData.offset = i / n;
       node.group.add(m);
@@ -307,9 +327,14 @@ export function createScene(container, spec) {
     const mk = S.markers[p.id] || {};
     const node = { place: p, group, base, wx, wz, figures: [], ripples: [], k: 0, colorTo: new THREE.Color(mk.color || '#999') };
     if (p.layer === 'study') {
-      const puck = new THREE.Mesh(puckGeo, new THREE.MeshToonMaterial({ color: node.colorTo.clone(), gradientMap: toonGradient() }));
-      puck.position.y = 0.25;
+      const puck = new THREE.Mesh(puckGeo, solid(node.colorTo.clone(), 0.4));
+      puck.position.y = 0.08;
       puck.castShadow = true;
+      const halo = new THREE.Mesh(haloGeo, flat(node.colorTo.clone(), 0.16));
+      halo.position.y = 0.02;
+      halo.renderOrder = 1;
+      group.add(halo);
+      node.halo = halo;
       const lift = new THREE.Group();
       lift.add(puck);
       group.add(lift);
@@ -317,7 +342,7 @@ export function createScene(container, spec) {
       const el = css('pin-db', mk.label || '');
       el.style.setProperty('--c', mk.color || '#999');
       node.label = new CSS2DObject(el);
-      node.label.position.y = 1.35;
+      node.label.position.y = 0.9;
       lift.add(node.label);
       tagPick(lift, p.id);
       node.intro = { delay: 1350 + i * 55, dur: 650, drop: true };
@@ -339,7 +364,8 @@ export function createScene(container, spec) {
     if (node.place.layer === 'study') { placeFigures(node, mk.people || 0); setRipples(node, mk.ripples || 0, mk.color || '#999'); }
   });
 
-  const selRing = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.45, 56).rotateX(-Math.PI / 2), flat(C.accent, 0.9));
+  const selRing = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.36, 64).rotateX(-Math.PI / 2), flat(ACCENT, 0.9));
+  selRing.renderOrder = 3;
   selRing.visible = false;
   island.add(selRing);
 
@@ -350,7 +376,7 @@ export function createScene(container, spec) {
   const controls = new MapControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.09;
-  controls.maxPolarAngle = 1.2;
+  controls.maxPolarAngle = 1.15;
   controls.minDistance = 10;
   controls.zoomSpeed = 1.1;
   controls.target.copy(home);
@@ -385,6 +411,7 @@ export function createScene(container, spec) {
     renderer.domElement.style.width = w + 'px';
     renderer.domElement.style.height = h + 'px';
     labels.setSize(w, h);
+    composer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     controls.maxDistance = fitDist() * 2.2;
@@ -446,7 +473,7 @@ export function createScene(container, spec) {
     // Entrance: island drops in, tiles and blocks grow with overshoot as a wave from the centre.
     if (!introDone) {
       const ip = clamp01(t / 800);
-      island.position.y = 7 * (1 - outBack(ip));
+      island.position.y = -2 * (1 - outCubic(ip));
       roomMeshes.forEach((m) => { const p = clamp01((t - m.userData.intro.delay) / m.userData.intro.dur); m.scale.y = Math.max(0.001, outBack(p)); });
       if (t > 4200) introDone = true;
     }
@@ -454,28 +481,30 @@ export function createScene(container, spec) {
       const ip = clamp01((t - n.intro.delay) / n.intro.dur);
       const hov = n.place.id === S.hover ? 1 : 0, sel = n.place.id === S.selected ? 1 : 0;
       n.k += (Math.max(hov, sel) - n.k) * 0.16;
-      const bob = sel && !reduced() ? Math.abs(Math.sin(now / 260)) * 0.45 : 0;
+      const bob = sel && !reduced() ? Math.abs(Math.sin(now / 420)) * 0.25 : 0;
       if (n.puck) {
         // Drop from the sky, squash on landing.
-        const y = n.intro.drop ? 9 * Math.pow(1 - outCubic(ip), 2) : 0;
-        const land = ip > 0.55 && ip < 1 ? Math.sin(((ip - 0.55) / 0.45) * Math.PI) : 0;
+        const y = n.intro.drop ? 4 * Math.pow(1 - outCubic(ip), 2) : 0;
+        const land = ip > 0.6 && ip < 1 ? 0.4 * Math.sin(((ip - 0.6) / 0.4) * Math.PI) : 0;
         n.lift.position.y = y + n.k * 0.35 + bob;
         n.lift.scale.set(1 + 0.25 * land + 0.12 * n.k, Math.max(0.001, ip > 0 ? 1 - 0.3 * land : 0.001) * (1 + 0.12 * n.k), 1 + 0.25 * land + 0.12 * n.k);
         n.puck.material.color.lerp(n.colorTo, 0.12);
+        n.halo.material.color.copy(n.puck.material.color);
+        n.halo.scale.setScalar(Math.max(0.001, outCubic(ip)));
       } else {
         n.model.scale.setScalar(Math.max(0.001, n.s * outBack(ip)) * (1 + 0.1 * n.k));
         n.lift.position.y = n.k * 0.4 + bob;
       }
       n.figures.forEach((f) => {
         const u = f.userData, fp = clamp01((t - u.delay) / 450);
-        const hop = reduced() ? 0 : Math.abs(Math.sin(now / 1000 * u.speed * Math.PI + u.phase));
-        f.scale.set(1, 1 - 0.06 * (1 - hop), 1).multiplyScalar(Math.max(0.001, outBack(fp)) * 0.85);
-        f.position.y = u.base + hop * 0.14;
+        const hop = reduced() ? 0.5 : 0.5 + 0.5 * Math.sin(now / 1000 * u.speed * Math.PI + u.phase);
+        f.scale.set(1, 1 + 0.02 * hop, 1).multiplyScalar(Math.max(0.001, outBack(fp)));
+        f.position.y = u.base;
       });
       n.ripples.forEach((m) => {
         const k = ((now / 1700) + m.userData.offset) % 1;
         m.scale.setScalar(1 + k * 3.2);
-        m.material.opacity = reduced() || ip < 1 ? 0 : 0.55 * (1 - k);
+        m.material.opacity = reduced() || ip < 1 ? 0 : 0.5 * (1 - k);
       });
     });
     if (S.selected && nodes.has(S.selected)) {
@@ -491,7 +520,7 @@ export function createScene(container, spec) {
       const r = container.getBoundingClientRect();
       setHover(id, pointer.x - r.left, pointer.y - r.top);
     }
-    effect.render(scene, camera);
+    composer.render();
     labels.render(scene, camera);
   }
   raf = requestAnimationFrame(frame);
@@ -535,7 +564,16 @@ export function createScene(container, spec) {
     flyTo({ ...VIEW[view] }, 900);
   }
 
+  const onTheme = () => {
+    theme = dark.matches ? THEMES.dark : THEMES.light;
+    named.forEach((m, k) => m.color.setHex(theme[k]));
+    edgeMat.color.setHex(theme.edge);
+    catcher.material.opacity = theme.shadow;
+  };
+  dark.addEventListener('change', onTheme);
+
   function dispose() {
+    dark.removeEventListener('change', onTheme);
     cancelAnimationFrame(raf);
     ro.disconnect();
     controls.dispose();

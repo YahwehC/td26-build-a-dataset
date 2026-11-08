@@ -1,12 +1,19 @@
-file,place_id,label_as_sent,note
-Report 2026-11-07 13-42-45.pdf,S-FR-C,Flag Room center,
-Report 2026-11-07 13-43-45.pdf,S-FR-BL,Flag Room bottom-left corner,
-Report 2026-11-07 13-44-43.pdf,S-FR-BR,Flag Room bottom-right corner,no one playing the piano
-Report 2026-11-07 13-45-45.pdf,S-FR-TR,Flag Room top-right corner,
-Report 2026-11-07 13-46-48.pdf,S-FR-TL,Flag Room top-left corner,
-Report 2026-11-07 13-59-08.pdf,S-HR-R,Howdy room right side,
-Report 2026-11-07 14-02-15.pdf,S-HR-L,Howdy room left side,
-Report 2026-11-07 14-06-49.pdf,S-AS,Aggie shop study spot (Aggie Stop),
-Report 2026-11-07 14-08-11.pdf,S-A8-L,Area 8 (Food Court) left,
-Report 2026-11-07 14-09-07.pdf,S-A8-R,Area 8 (Food Court) right,area 8 had 19 people
-Report 2026-11-07 14-10-54.pdf,S-A5,Area 5 (Veterans Lounge),1 person
+file,place_id,round,label_as_sent,note
+Report 2026-11-07 13-42-45.pdf,S-FR-C,R0,Flag Room center,
+Report 2026-11-07 13-43-45.pdf,S-FR-BL,R0,Flag Room bottom-left corner,
+Report 2026-11-07 13-44-43.pdf,S-FR-BR,R0,Flag Room bottom-right corner,no one playing the piano
+Report 2026-11-07 13-45-45.pdf,S-FR-TR,R0,Flag Room top-right corner,
+Report 2026-11-07 13-46-48.pdf,S-FR-TL,R0,Flag Room top-left corner,
+Report 2026-11-07 13-59-08.pdf,S-HR-R,R0,Howdy room right side,
+Report 2026-11-07 14-02-15.pdf,S-HR-L,R0,Howdy room left side,
+Report 2026-11-07 14-06-49.pdf,S-AS,R0,Aggie shop study spot (Aggie Stop),
+Report 2026-11-07 14-08-11.pdf,S-A8-L,R0,Area 8 (Food Court) left,
+Report 2026-11-07 14-09-07.pdf,S-A8-R,R0,Area 8 (Food Court) right,area 8 had 19 people
+Report 2026-11-07 14-10-54.pdf,S-A5,R0,Area 5 (Veterans Lounge),1 person
+Report 2026-11-07 18-03-54.pdf,S-FR-BL,R1,Flag Room bottom-left corner,
+Report 2026-11-07 18-04-25.pdf,S-FR-BR,R1,Flag Room bottom-right corner,no one playing the piano
+Report 2026-11-07 18-05-03.pdf,S-FR-TR,R1,Flag Room top-right corner,
+Report 2026-11-07 18-06-30.pdf,S-A8-R,R1,Area 8 (Food Court) right,
+Report 2026-11-07 18-07-16.pdf,S-A8-L,R1,Area 8 (Food Court) left,
+Report 2026-11-07 18-08-36.pdf,S-HR-R,R1,Howdy room right side,
+Report 2026-11-07 18-09-16.pdf,S-HR-L,R1,Howdy room left side,

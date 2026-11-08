@@ -556,7 +556,7 @@ function toonify(root) {
   });
 }
 
-export function buildModel(kind, data = {}) {
+export function buildModel(kind, data = {}, opts = {}) {
   const kit = makeKit((o) => o);
   const g = new THREE.Group();
   const drops = [], spin = [], picks = [];
@@ -564,7 +564,8 @@ export function buildModel(kind, data = {}) {
   else if (kind === 'water') buildWater(g, kit, data, drops, spin);
   else if (kind === 'microwave') buildMicrowaves(g, kit, data, drops);
   else buildPrinters(g, kit, data, drops);
-  toonify(g);
+  if (opts.toon) toonify(g);
+  else g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   const box = new THREE.Box3().setFromObject(g);
   const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
   g.position.set(-c.x, -box.min.y, -c.z);

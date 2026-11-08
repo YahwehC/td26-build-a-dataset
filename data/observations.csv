@@ -6,3 +6,7 @@ O004,M-1,R0,2026-11-07T14:00:00,,,,,,4,,,,,"4 microwaves; disposable utensils, n
 O005,W-1,R0,2026-11-07T14:00:00,,,,,155082,,,,,,counter read from our close-up photo of the display; time about 2 PM
 O006,W-3,R0,2026-11-07T14:00:00,,,,,119842,,,,,,counter read from our close-up photo of the display; time about 2 PM
 O007,W-4,R0,2026-11-07T14:00:00,,,,,151370,,,,,,counter read from our close-up photo of the display; time about 2 PM
+O008,W-1,R1,2026-11-07T18:15:00,,,,,155086,,,,,,"counter read from our close-up photo of the display; time about 6:15 PM (photos sent 18:26, no EXIF)"
+O009,W-2,R1,2026-11-07T18:15:00,,,,,191548,,,,,,"counter read from our close-up photo of the display; time about 6:15 PM (photos sent 18:26, no EXIF); first counter reading for W-2 (assigned by elimination: the other three match their R0 values)"
+O010,W-3,R1,2026-11-07T18:15:00,,,,,119844,,,,,,"counter read from our close-up photo of the display; time about 6:15 PM (photos sent 18:26, no EXIF)"
+O011,W-4,R1,2026-11-07T18:15:00,,,,,151372,,,,,,"counter read from our close-up photo of the display; time about 6:15 PM (photos sent 18:26, no EXIF)"
