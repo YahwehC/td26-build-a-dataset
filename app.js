@@ -171,34 +171,27 @@
     return { units: num(st.units), units_working: num(st.units_working), broken_note: st.note || '' };
   }
 
-  // What the scene shows per place: colour, badge text, people figures, sound ripples, model data.
+  // What the scene shows per place: colour, chip text, sound ripples (by band), model data.
   function markers() {
     const out = {};
     S.places.forEach((p) => {
       if (p.layer === 'study') {
-        const n = noiseFor(p.place_id), b = band(n?.laeq), o = obsFor(p.place_id);
+        const n = noiseFor(p.place_id), b = band(n?.laeq);
         out[p.place_id] = {
-          color: b ? tok('--' + b.key) : tok('--unmeasured'),
+          color: b ? tok('--' + b.key) : tok('--unmeasured'), measured: !!n,
           label: n ? String(Math.round(n.laeq)) : '–',
-          people: o && o.people ? Number(o.people) || 0 : 0,
-          ripples: b ? { quiet: 0, moderate: 1, loud: 2, vloud: 3 }[b.key] : 0
+          level: n ? Math.max(0, Math.min(1, (n.laeq - 40) / 35)) : 0,
+          ripples: b ? { quiet: 1, moderate: 2, loud: 3, vloud: 3 }[b.key] : 0
         };
       } else {
-        out[p.place_id] = { color: tok('--' + p.layer), model: { kind: p.layer, data: modelData(p) } };
+        out[p.place_id] = { color: tok('--' + p.layer), measured: true, model: { kind: p.layer, data: modelData(p) } };
       }
     });
     return out;
   }
-
-  let tip = null;
-  function showTip(id, x, y) {
-    if (!tip) { tip = h('div', { class: 'tip', role: 'status' }); $('map').parentElement.appendChild(tip); }
-    if (!id) { tip.hidden = true; return; }
-    const p = S.byId.get(id);
-    if (tip.dataset.id !== id) { tip.dataset.id = id; tip.replaceChildren(h('b', {}, p.name), h('span', {}, describe(p))); }
-    tip.hidden = false;
-    tip.style.transform = `translate(${Math.round(x + 14)}px, ${Math.round(y + 14)}px)`;
-  }
+  const areaNames = () => Object.fromEntries([...S.areas.entries()]
+    .filter(([, name]) => name && !/^\(/.test(name))
+    .map(([num, name]) => [num, String(name).split(/ \/ | at /)[0]]));
 
   async function installMap(svgText) {
     const el = $('map');
@@ -206,14 +199,13 @@
     try { mod = await import('./scene.js'); } catch (e) { throw new Error('3D engine did not load (Three.js needs internet).'); }
     el.replaceChildren();
     S.scene = mod.createScene(el, {
-      svgText, view: S.view, markers: markers(),
+      svgText, view: S.view, markers: markers(), areaNames: areaNames(),
       places: S.places.map((p) => ({ id: p.place_id, layer: p.layer, x: Number(p.x), y: Number(p.y) })),
-      onHover: showTip,
-      onPick: (id) => select(id, true)
+      onPick: (id) => select(id, true),
+      callout: (id) => { const p = S.byId.get(id); return { title: p.name, sub: describe(p) }; }
     });
     applyVisibility();
     if (S.selected) S.scene.select(S.selected, false);
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(updateMarkers, 50));
   }
 
   function updateMarkers() { if (S.scene) S.scene.update(markers()); }

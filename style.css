@@ -1,36 +1,33 @@
 /* MSC Field Map. Minimal: full-bleed map + one sidebar, hairline dividers, no cards, no shadows.
    Colour is reserved for data (noise bands, amenity types); the accent marks selection only. */
 :root {
-  --bg: #ffffff;
-  --ink: #111111;
-  --muted: #6e6e73;
-  --faint: #a1a1a6;
-  --line: #e8e8ea;
-  --hover: #f5f5f6;
-  --accent: #500000;          /* Aggie maroon */
-  --map-bg: linear-gradient(180deg, #f7f7f5 0%, #ececea 100%);
-  --label: #8e8e93;
+  /* Dark "digital twin" palette from neonplan3d (c) 2026 Mastershort, MIT (styles.ts / themes.ts) */
+  --bg: #070b14;
+  --bg2: #0d1424;
+  --chrome: rgba(14, 21, 38, 0.86);
+  --ink: #e6eefc;
+  --muted: #8a9bb8;
+  --faint: #56658a;
+  --line: rgba(120, 170, 255, 0.16);
+  --hover: rgba(55, 224, 255, 0.06);
+  --accent: #37e0ff;
+  --accent-text: #041018;
+  --map-bg: radial-gradient(ellipse at 50% 35%, rgb(18, 28, 52), rgb(7, 11, 20) 72%);
+  --label: rgba(138, 155, 184, 0.75);
 
-  --quiet: #1f9d68;
-  --moderate: #e9a917;
-  --loud: #ee7433;
-  --vloud: #df4349;
-  --unmeasured: #b0b0b6;
-  --water: #2f7fe0;
-  --vending: #6a4ce6;
-  --microwave: #f0603f;
-  --printer: #55555c;
+  --quiet: #3ee6a8;
+  --moderate: #ffb547;
+  --loud: #ff8a4c;
+  --vloud: #ff6b8b;
+  --unmeasured: #4a5878;
+  --water: #4d9bff;
+  --vending: #a78bfa;
+  --microwave: #f472b6;
+  --printer: #8a9bb8;
 
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #111113; --ink: #ededef; --muted: #9a9aa2; --faint: #6b6b72; --line: #26262a; --hover: #1b1b1e; --accent: #e89aa8;
-    --map-bg: linear-gradient(180deg, #1b1b1e 0%, #121214 100%); --label: #85858c;
-    --unmeasured: #5f5f66; --printer: #8a8a92;
-    color-scheme: dark;
-  }
+  --font: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --title-font: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -55,7 +52,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 
 /* ---------- sidebar head ---------- */
-.head h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.head h1 { margin: 0; font: 700 22px/1.1 var(--title-font); letter-spacing: -.01em; }
 .meta { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
 
 .search { position: relative; display: block; }
@@ -156,18 +153,25 @@ td.n { font-variant-numeric: tabular-nums; }
 .foot { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .foot p { margin: 4px 0 0; }
 
-/* ---------- 3D scene ---------- */
+/* ---------- 3D scene (neonplan3d look) ---------- */
 .scene-canvas { position: absolute; inset: 0; display: block; touch-action: none; }
 .scene-labels { position: absolute; inset: 0; pointer-events: none; }
 .scene-labels > div { opacity: 0; transition: opacity .6s ease-out; }
 .labels-in .scene-labels > div { opacity: 1; }
-.lbl-area { font: 500 10px/1 var(--font); letter-spacing: .14em; text-transform: uppercase; color: var(--label); white-space: nowrap; }
-.lbl-num { font: 500 9.5px/1 var(--font); color: var(--faint); }
-.pin-db { font: 600 11px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--bg); padding: 3px 6px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04); white-space: nowrap; }
-.pin-db::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--c, #ccc); margin-right: 5px; vertical-align: 1px; }
-.tip { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; max-width: 240px; background: var(--ink); color: var(--bg); padding: 6px 9px; font: 400 12.5px/1.35 var(--font); }
-.tip b { display: block; font-weight: 600; }
-.tip[hidden] { display: none; }
+.lbl-area { font: 600 10px/1 var(--font); letter-spacing: .16em; text-transform: uppercase; color: var(--label); white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: 5px; font: 600 12px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--ink);
+  background: var(--chrome); border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px; white-space: nowrap; backdrop-filter: blur(6px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .5); transition: border-color .2s, box-shadow .2s; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+.chip.dim { color: var(--muted); }
+.chip.hot { border-color: rgba(55, 224, 255, .6); box-shadow: 0 0 18px rgba(55, 224, 255, .3); }
+.callout { width: 0; height: 0; pointer-events: none; }
+.callout > div { position: absolute; right: 22px; top: 0; transform: translateY(-50%); display: grid; justify-items: start; gap: 1px;
+  padding: 8px 14px; border-radius: 12px; background: var(--accent); color: var(--accent-text); white-space: nowrap;
+  box-shadow: 0 0 22px rgba(55, 224, 255, .28); animation: pop .22s ease-out; }
+.callout b { font: 700 15px/1.2 var(--title-font); letter-spacing: -.01em; }
+.callout span { font: 500 12px/1.3 var(--font); opacity: .78; }
+@keyframes pop { from { opacity: 0; transform: translateY(-50%) translateX(6px); } }
 
 /* ---------- modals ---------- */
 .modal { border: 0; padding: 0; background: transparent; max-width: none; max-height: none; width: 100%; height: 100%; color: var(--ink); }
@@ -191,3 +195,12 @@ td.n { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
+
+/* ---------- sidebar on the dark theme: one line per row, data colour as a glowing dot ---------- */
+.side { background: linear-gradient(180deg, var(--bg2), var(--bg)); }
+.rank-name, .rank-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-meta { color: var(--faint); }
+.rank.is-selected .rank-name { color: var(--accent); }
+.rank-value .band { font-size: 0; }
+.rank-value .band::before { width: 7px; height: 7px; box-shadow: 0 0 8px currentColor; }
+.rank:hover { background: var(--hover); }

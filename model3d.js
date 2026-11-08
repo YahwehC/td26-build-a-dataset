@@ -556,6 +556,24 @@ function toonify(root) {
   });
 }
 
+// Hologram look for the dark map (neonplan3d style): dark unlit bodies keeping a hint of their colour,
+// plus additive edge lines in the layer colour.
+function neonify(root, accent) {
+  const edge = new THREE.Color(accent).multiplyScalar(0.9);
+  const lineMat = new THREE.LineBasicMaterial({ color: edge, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  const meshes = [];
+  root.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  meshes.forEach((o) => {
+    const m = o.material;
+    if (m.isMeshStandardMaterial) {
+      const c = new THREE.Color(0x131d31).lerp(m.color, 0.05);   // linear space: a small mix already tints
+      o.material = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.94, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+      m.dispose();
+      o.add(new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 35), lineMat));
+    }
+  });
+}
+
 export function buildModel(kind, data = {}, opts = {}) {
   const kit = makeKit((o) => o);
   const g = new THREE.Group();
@@ -564,7 +582,8 @@ export function buildModel(kind, data = {}, opts = {}) {
   else if (kind === 'water') buildWater(g, kit, data, drops, spin);
   else if (kind === 'microwave') buildMicrowaves(g, kit, data, drops);
   else buildPrinters(g, kit, data, drops);
-  if (opts.toon) toonify(g);
+  if (opts.neon) neonify(g, opts.neon);
+  else if (opts.toon) toonify(g);
   else g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   const box = new THREE.Box3().setFromObject(g);
   const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
