@@ -48,7 +48,8 @@ export function createPlan(container, spec) {
 
   /* ---------- DOM ---------- */
   const root = div('plan2d', container);
-  const svg = el('svg', { class: 'plan-svg', role: 'img', 'aria-label': 'Floor plan of the MSC 1st floor' }, root);
+  const stage = div('plan-stage', root);   // tilted as one 3D plane in 3D view
+  const svg = el('svg', { class: 'plan-svg', role: 'img', 'aria-label': 'Floor plan of the MSC 1st floor' }, stage);
   const defs = el('defs', {}, svg);
   const hatch = el('pattern', { id: 'p2d-hatch', width: 8, height: 8, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
   el('rect', { width: 8, height: 8, class: 'hatch-bg' }, hatch);
@@ -90,6 +91,18 @@ export function createPlan(container, spec) {
   /* ---------- area names, placed where they collide least with pins ---------- */
   const labelsG = el('g', { class: 'area-labels' }, world);
   const ctx = document.createElement('canvas').getContext('2d');
+  // Walls for the 3D view: the room outlines repeated on thin layers stacked in z (CSS 3D), which reads as solid low walls.
+  const WALL_LAYERS = 12;
+  const wallDs = [...doc.querySelectorAll('path.room')].map((r) => r.getAttribute('d'));
+  const walls = [];
+  for (let i = 1; i <= WALL_LAYERS; i++) {
+    const w = el('svg', { class: 'plan-svg wall-layer' + (i === WALL_LAYERS ? ' wall-top' : ''), 'aria-hidden': 'true' }, stage);
+    const g = el('g', {}, w);
+    wallDs.forEach((d) => el('path', { d, class: 'wall' }, g));
+    el('path', { d: outlineD, class: 'wall outer' }, g);
+    walls.push(w);
+  }
+
   const placesXY = spec.places.map((p) => [p.x, p.y]);
   Object.entries(spec.areaNames || {}).forEach(([num, name]) => {
     const ds = areaPaths.get(String(num));
@@ -131,6 +144,8 @@ export function createPlan(container, spec) {
   mkBtn('+', 'Zoom in', () => zoomAt(W / 2, H / 2, 1.6, true));
   mkBtn('−', 'Zoom out', () => zoomAt(W / 2, H / 2, 1 / 1.6, true));
   mkBtn('⤢', 'Show the whole floor', () => fit(true));
+  const tiltBtn = mkBtn('3D', 'Switch between 3D and flat view', () => setTilt(tiltTarget ? 0 : 1, true));
+  tiltBtn.classList.add('tilt-btn');
 
   /* ---------- pins ---------- */
   const pins = new Map();
@@ -219,7 +234,29 @@ export function createPlan(container, spec) {
 
   /* ---------- view: centre (cx, cy) in plan units, k = screen px per unit ---------- */
   let W = 1, H = 1, k = 1, cx = B.x0 + B.w / 2, cy = B.y0 + B.h / 2, fitK = 1, kMax = 6;
-  const toScreen = (x, y) => [(x - cx) * k + W / 2, (y - cy) * k + H / 2];
+  // 3D view: the stage is tilted with perspective(P) rotateX(RX·tilt) rotateZ(RZ·tilt) about its centre.
+  const P = 1500, RX = 54 * Math.PI / 180, RZ = -16 * Math.PI / 180;
+  let tilt = 0, tiltTarget = 0;
+  const ang = () => [RX * tilt, RZ * tilt];
+  // planar offset from the stage centre (px) -> screen px; z = height above the floor (px)
+  function project(px, py, z = 0) {
+    const [a, b] = ang();
+    const x1 = px * Math.cos(b) - py * Math.sin(b), y1 = px * Math.sin(b) + py * Math.cos(b);
+    const y2 = y1 * Math.cos(a) - z * Math.sin(a), z2 = y1 * Math.sin(a) + z * Math.cos(a);
+    const s = P / (P - z2);
+    return [W / 2 + x1 * s, H / 2 + y2 * s];
+  }
+  // screen px -> planar offset (exact inverse of project for z = 0)
+  function unproject(sx, sy) {
+    const [a, b] = ang();
+    const X = sx - W / 2, Y = sy - H / 2;
+    const y1 = (Y * P) / (P * Math.cos(a) + Y * Math.sin(a));
+    const s = P / (P - y1 * Math.sin(a));
+    const x1 = X / s;
+    return [x1 * Math.cos(b) + y1 * Math.sin(b), -x1 * Math.sin(b) + y1 * Math.cos(b)];
+  }
+  const toScreen = (x, y) => project((x - cx) * k, (y - cy) * k);
+  const toUnits = (sx, sy) => { const [px, py] = unproject(sx, sy); return [px / k + cx, py / k + cy]; };
 
   // Home view: the whole floor on wide screens; on narrow screens the part where our places are.
   const D = (() => {
@@ -240,7 +277,8 @@ export function createPlan(container, spec) {
   }
   function clamp() {
     k = Math.max(fitK * 0.85, Math.min(kMax, k));
-    const mx = Math.max(0, (B.w * k - W) / 2 / k + 60 / k), my = Math.max(0, (B.h * k - H) / 2 / k + 60 / k);
+    const extra = (60 + tilt * 220) / k;
+    const mx = Math.max(0, (B.w * k - W) / 2 / k + extra), my = Math.max(0, (B.h * k - H) / 2 / k + extra);
     const ccx = B.x0 + B.w / 2, ccy = B.y0 + B.h / 2;
     cx = Math.max(ccx - mx, Math.min(ccx + mx, cx));
     cy = Math.max(ccy - my, Math.min(ccy + my, cy));
@@ -251,7 +289,18 @@ export function createPlan(container, spec) {
     raf = requestAnimationFrame(() => { raf = 0; draw(); });
   }
   function draw() {
-    svg.setAttribute('viewBox', `${cx - W / 2 / k} ${cy - H / 2 / k} ${W / k} ${H / k}`);
+    const vb = `${cx - W / 2 / k} ${cy - H / 2 / k} ${W / k} ${H / k}`;
+    svg.setAttribute('viewBox', vb);
+    const [a, b] = ang();
+    stage.style.transform = tilt > 0.001 ? `perspective(${P}px) rotateX(${a}rad) rotateZ(${b}rad)` : '';
+    root.classList.toggle('is-3d', tilt > 0.001);
+    const wallH = tilt * Math.min(30, 9 * Math.max(1, k / fitK)) * Math.max(0.5, fitK / 0.5);
+    walls.forEach((w, i) => {
+      w.style.display = tilt > 0.001 ? '' : 'none';
+      if (tilt <= 0.001) return;
+      w.setAttribute('viewBox', vb);
+      w.style.transform = `translateZ(${(((i + 1) / WALL_LAYERS) * wallH).toFixed(2)}px)`;
+    });
     const compact = k < 0.42;
     if (compact !== root.classList.contains('compact')) { root.classList.toggle('compact', compact); pins.forEach((pin) => { pin.size = null; }); }
     // cluster amenity pins of the same layer that would overlap on screen
@@ -311,9 +360,10 @@ export function createPlan(container, spec) {
   }
 
   function zoomAt(sx, sy, f, animate) {
-    const ux = (sx - W / 2) / k + cx, uy = (sy - H / 2) / k + cy;
+    const [px, py] = unproject(sx, sy);
+    const ux = px / k + cx, uy = py / k + cy;
     const nk = Math.max(fitK * 0.85, Math.min(kMax, k * f));
-    const ncx = ux - (sx - W / 2) / nk, ncy = uy - (sy - H / 2) / nk;
+    const ncx = ux - px / nk, ncy = uy - py / nk;
     if (animate) flyTo(ncx, ncy, nk, 320);
     else { k = nk; cx = ncx; cy = ncy; clamp(); layout(); }
   }
@@ -331,9 +381,30 @@ export function createPlan(container, spec) {
     };
     anim = requestAnimationFrame(step);
   }
+  // the home view for a given tilt: tilted floors are foreshortened, so zoom in a little and look a bit further up
+  const homeFor = (t) => ({ cx: home.cx, cy: home.cy + t * 30, k: home.k * (1 - 0.1 * t) });
   function fit(animate) {
     measure();
-    if (animate) flyTo(home.cx, home.cy, home.k); else { k = home.k; cx = home.cx; cy = home.cy; clamp(); layout(); }
+    const hm = homeFor(tiltTarget);
+    if (animate) flyTo(hm.cx, hm.cy, hm.k); else { k = hm.k; cx = hm.cx; cy = hm.cy; clamp(); layout(); }
+  }
+  // animate between flat (0) and 3D (1); keeps the view centre, eases the zoom toward the matching home zoom
+  let tanim = 0;
+  function setTilt(to, animate = true, ms = 1300) {
+    tiltTarget = to;
+    tiltBtn.textContent = to ? '2D' : '3D';
+    tiltBtn.setAttribute('aria-pressed', String(!!to));
+    cancelAnimationFrame(tanim);
+    const t0 = performance.now(), from = tilt, kf = k, kt = k * (1 - 0.1 * to) / (1 - 0.1 * from);
+    if (!animate || reduced()) { tilt = to; k = kt; clamp(); layout(); return; }
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / ms), e = ease(t);
+      tilt = from + (to - from) * e;
+      k = kf * Math.pow(kt / kf, e);
+      clamp(); draw();
+      if (t < 1) tanim = requestAnimationFrame(step);
+    };
+    tanim = requestAnimationFrame(step);
   }
 
   /* ---------- input: wheel, drag, pinch, double-click ---------- */
@@ -357,16 +428,18 @@ export function createPlan(container, spec) {
     if (!ptrs.has(e.pointerId)) return;
     ptrs.set(e.pointerId, [e.clientX, e.clientY]);
     const r = root.getBoundingClientRect();
-    const P = [...ptrs.values()];
-    const mx = P.reduce((s, p) => s + p[0], 0) / P.length - r.left, my = P.reduce((s, p) => s + p[1], 0) / P.length - r.top;
-    const dist = P.length > 1 ? Math.hypot(P[0][0] - P[1][0], P[0][1] - P[1][1]) : 0;
-    if (last && last.n === P.length) {
-      cx -= (mx - last.mx) / k; cy -= (my - last.my) / k;
+    const T = [...ptrs.values()];
+    const mx = T.reduce((s, p) => s + p[0], 0) / T.length - r.left, my = T.reduce((s, p) => s + p[1], 0) / T.length - r.top;
+    const dist = T.length > 1 ? Math.hypot(T[0][0] - T[1][0], T[0][1] - T[1][1]) : 0;
+    if (last && last.n === T.length) {
+      // keep the floor point under the pointer under the pointer (exact in the tilted view too)
+      const [ax, ay] = toUnits(last.mx, last.my), [bx, by] = toUnits(mx, my);
+      cx += ax - bx; cy += ay - by;
       moved += Math.abs(mx - last.mx) + Math.abs(my - last.my);
-      if (P.length > 1 && last.dist) zoomAt(mx, my, dist / last.dist, false);
+      if (T.length > 1 && last.dist) zoomAt(mx, my, dist / last.dist, false);
       clamp(); layout();
     }
-    last = { mx, my, dist, n: P.length };
+    last = { mx, my, dist, n: T.length };
   };
   const onUp = (e) => {
     ptrs.delete(e.pointerId);
@@ -390,9 +463,13 @@ export function createPlan(container, spec) {
   fit(false);
   update(spec.markers || {});
   requestAnimationFrame(() => root.classList.add('is-in'));
+  // 3D by default on wide screens: the plan lands flat, then tilts up while the walls rise
+  const want3d = spec.tilt != null ? spec.tilt : W >= 820;
+  if (want3d) setTimeout(() => setTilt(1, true, 1600), reduced() ? 0 : 450);
+  else setTilt(0, false);
 
   return {
-    update, setVisible, select, fit,
+    update, setVisible, select, fit, setTilt,
     hover: (id) => setHover(id),
     dispose() { ro.disconnect(); cancelAnimationFrame(anim); root.remove(); }
   };
